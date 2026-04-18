@@ -1,0 +1,138 @@
+{% extends "core/base.html" %}
+
+{% block title %}ERP Core - Dashboard{% endblock %}
+{% block page_title %}Dashboard{% endblock %}
+
+{% block main_content %}
+<div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+    <div class="bg-white rounded-xl border border-slate-200 p-6">
+        <div class="flex items-center justify-between mb-4">
+            <span class="text-sm font-medium text-slate-500">Total Value</span>
+            <i class="fas fa-dollar-sign text-indigo-500"></i>
+        </div>
+        <p class="text-2xl font-bold text-slate-800" id="total-value">৳0</p>
+        <p class="text-xs text-slate-400 mt-1">Total inventory value</p>
+    </div>
+    <div class="bg-white rounded-xl border border-slate-200 p-6">
+        <div class="flex items-center justify-between mb-4">
+            <span class="text-sm font-medium text-slate-500">Items</span>
+            <i class="fas fa-box text-emerald-500"></i>
+        </div>
+        <p class="text-2xl font-bold text-slate-800" id="total-items">0</p>
+        <p class="text-xs text-slate-400 mt-1">Total SKUs</p>
+    </div>
+    <div class="bg-white rounded-xl border border-slate-200 p-6">
+        <div class="flex items-center justify-between mb-4">
+            <span class="text-sm font-medium text-slate-500">Below Min</span>
+            <i class="fas fa-exclamation-triangle text-amber-500"></i>
+        </div>
+        <p class="text-2xl font-bold text-amber-600" id="below-min">0</p>
+        <p class="text-xs text-slate-400 mt-1">Items below safety</p>
+    </div>
+    <div class="bg-white rounded-xl border border-slate-200 p-6">
+        <div class="flex items-center justify-between mb-4">
+            <span class="text-sm font-medium text-slate-500">Foreign</span>
+            <i class="fas fa-plane text-blue-500"></i>
+        </div>
+        <p class="text-2xl font-bold text-blue-600" id="foreign-pct">0%</p>
+        <p class="text-xs text-slate-400 mt-1">Of total value</p>
+    </div>
+</div>
+
+<div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+    <div class="bg-white rounded-xl border border-slate-200 p-6">
+        <h3 class="text-sm font-bold text-slate-700 mb-4">Value by Category</h3>
+        <canvas id="categoryChart"></canvas>
+    </div>
+    <div class="bg-white rounded-xl border border-slate-200 p-6">
+        <h3 class="text-sm font-bold text-slate-700 mb-4">Value by Source</h3>
+        <canvas id="sourceChart"></canvas>
+    </div>
+</div>
+
+<div class="bg-white rounded-xl border border-slate-200 p-6">
+    <h3 class="text-sm font-bold text-slate-700 mb-4">Top 10 Assets</h3>
+    <table class="w-full">
+        <thead>
+            <tr class="text-xs font-medium text-slate-400 uppercase tracking-wider">
+                <th class="text-left py-3">SKU</th>
+                <th class="text-left py-3">Name</th>
+                <th class="text-right py-3">Stock</th>
+                <th class="text-right py-3">Price</th>
+                <th class="text-right py-3">Value</th>
+            </tr>
+        </thead>
+        <tbody id="top-assets">
+            <tr><td colspan="5" class="py-4 text-center text-slate-400">Loading...</td></tr>
+        </tbody>
+    </table>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const API_BASE = '/api';
+
+async function fetchAPI(url) {
+    try {
+        const response = await fetch(url);
+        return await response.json();
+    } catch (error) {
+        console.error('API Error:', error);
+        return null;
+    }
+}
+
+function formatCurrency(value) {
+    return '\u09F3' + Number(value).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+async function loadDashboard() {
+    const kpi = await fetchAPI(`${API_BASE}/valuation/kpi/`);
+    if (kpi) {
+        document.getElementById('total-value').textContent = formatCurrency(kpi.total_value);
+        document.getElementById('total-items').textContent = kpi.total_items;
+        document.getElementById('below-min').textContent = kpi.below_min_stock;
+        document.getElementById('foreign-pct').textContent = kpi.foreign_percentage + '%';
+    }
+
+    const categoryData = await fetchAPI(`${API_BASE}/valuation/by-category/`);
+    if (categoryData && categoryData.length) {
+        new Chart(document.getElementById('categoryChart'), {
+            type: 'doughnut',
+            data: {
+                labels: categoryData.map(d => d.major_category),
+                datasets: [{ data: categoryData.map(d => d.total_value), backgroundColor: ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4'] }]
+            },
+            options: { responsive: true, plugins: { legend: { position: 'bottom' } } }
+        });
+    }
+
+    if (kpi) {
+        new Chart(document.getElementById('sourceChart'), {
+            type: 'bar',
+            data: {
+                labels: ['Local', 'Foreign'],
+                datasets: [{ data: [kpi.local_value || 0, kpi.foreign_value || 0], backgroundColor: ['#f59e0b', '#3b82f6'] }]
+            },
+            options: { responsive: true, plugins: { legend: { display: false } } }
+        });
+    }
+
+    const topAssets = await fetchAPI(`${API_BASE}/valuation/top-assets/`);
+    if (topAssets && topAssets.length) {
+        document.getElementById('top-assets').innerHTML = topAssets.map(a => `
+            <tr class="border-t border-slate-100">
+                <td class="py-3 font-mono text-sm font-bold text-indigo-600">${a.sku}</td>
+                <td class="py-3 text-sm">${a.name}</td>
+                <td class="py-3 text-right font-mono text-sm">${a.stock.toFixed(2)}</td>
+                <td class="py-3 text-right font-mono text-sm">${formatCurrency(a.price)}</td>
+                <td class="py-3 text-right font-mono text-sm font-bold text-emerald-600">${formatCurrency(a.asset_value)}</td>
+            </tr>
+        `).join('');
+    }
+}
+
+document.addEventListener('DOMContentLoaded', loadDashboard);
+</script>
+{% endblock %}

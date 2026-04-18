@@ -1,0 +1,145 @@
+{% extends "core/base.html" %}
+
+{% block title %}ERP Core - Duty Calculator{% endblock %}
+{% block page_title %}Duty Calculator{% endblock %}
+
+{% block main_content %}
+<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+    <div class="bg-white rounded-xl border border-slate-200 p-6">
+        <h3 class="text-lg font-bold text-slate-700 mb-4">Calculate Customs Duty</h3>
+        <form id="duty-form">
+            <div class="mb-4">
+                <label class="block text-xs font-bold text-slate-400 uppercase mb-1">HS Code</label>
+                <input type="text" id="hs-code" required placeholder="e.g. 8471.30.00" class="w-full rounded-lg border border-slate-200 p-2">
+            </div>
+            <div class="mb-4">
+                <label class="block text-xs font-bold text-slate-400 uppercase mb-1">Customs Value (BDT)</label>
+                <input type="number" id="customs-value" required min="0" step="0.01" class="w-full rounded-lg border border-slate-200 p-2">
+            </div>
+            <button type="submit" class="w-full px-4 py-2 bg-indigo-600 text-white rounded-lg font-bold hover:bg-indigo-700">
+                <i class="fas fa-calculator mr-2"></i>Calculate
+            </button>
+        </form>
+    </div>
+    
+    <div class="bg-white rounded-xl border border-slate-200 p-6">
+        <h3 class="text-lg font-bold text-slate-700 mb-4">Calculation Result</h3>
+        <div id="duty-result">
+            <p class="text-slate-400 text-center">Enter HS Code and value to calculate.</p>
+        </div>
+    </div>
+</div>
+
+<div class="bg-white rounded-xl border border-slate-200 p-6 mt-6">
+    <h3 class="text-lg font-bold text-slate-700 mb-4">HS Codes</h3>
+    <div class="mb-4 flex gap-4">
+        <input type="text" id="hs-search" placeholder="Search HS codes..." class="flex-1 rounded-lg border border-slate-200 p-2">
+        <button onclick="loadHSCodes()" class="px-4 py-2 bg-indigo-600 text-white rounded-lg">Search</button>
+    </div>
+    <div id="hs-codes-list">
+        <p class="text-slate-400 text-center">Loading...</p>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{% csrf_token %}
+<script>
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+const csrfToken = getCookie('csrfmiddlewaretoken');
+
+document.getElementById('duty-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const hsCode = document.getElementById('hs-code').value;
+    const value = document.getElementById('customs-value').value;
+    
+    const res = await fetch('/api/duty/duty-calculator/calculate/', {
+        method: 'POST',
+        headers: { 
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrfToken
+        },
+        body: JSON.stringify({ hs_code: hsCode, customs_value: value }),
+        credentials: 'include'
+    });
+    
+    const data = await res.json();
+    
+    if (data.error) {
+        document.getElementById('duty-result').innerHTML = `<p class="text-red-500 text-center">${data.error}</p>`;
+        return;
+    }
+    
+    document.getElementById('duty-result').innerHTML = `
+        <div class="space-y-2 text-sm">
+            <div class="flex justify-between py-2 border-b"><span>HS Code:</span><span class="font-mono font-bold">${data.hs_code}</span></div>
+            <div class="flex justify-between py-2 border-b"><span>Customs Value:</span><span class="font-mono">৳${Number(data.customs_value).toLocaleString()}</span></div>
+            <div class="flex justify-between py-2 border-b"><span>CD (${data.cd || 0}%):</span><span class="font-mono">৳${data.cd?.toLocaleString() || 0}</span></div>
+            <div class="flex justify-between py-2 border-b"><span>RD (${data.rd || 0}%):</span><span class="font-mono">৳${data.rd?.toLocaleString() || 0}</span></div>
+            <div class="flex justify-between py-2 border-b"><span>SD (${data.sd || 0}%):</span><span class="font-mono">৳${data.sd?.toLocaleString() || 0}</span></div>
+            <div class="flex justify-between py-2 border-b"><span>VAT (${data.vat || 0}%):</span><span class="font-mono">৳${data.vat?.toLocaleString() || 0}</span></div>
+            <div class="flex justify-between py-2 border-b"><span>AIT (${data.ait || 0}%):</span><span class="font-mono">৳${data.ait?.toLocaleString() || 0}</span></div>
+            <div class="flex justify-between py-2 border-b"><span>AT (${data.at || 0}%):</span><span class="font-mono">৳${data.at?.toLocaleString() || 0}</span></div>
+            <div class="flex justify-between py-2 border-b text-lg font-bold"><span>Total Duty:</span><span class="font-mono text-red-600">৳${data.total_duty?.toLocaleString() || 0}</span></div>
+            <div class="flex justify-between py-2 bg-indigo-50 rounded-lg px-3 mt-4"><span>Landed Cost:</span><span class="font-mono font-bold text-indigo-600">৳${data.landed_cost?.toLocaleString() || 0}</span></div>
+        </div>
+    `;
+});
+
+async function loadHSCodes() {
+    const search = document.getElementById('hs-search').value;
+    let url = '/api/duty/hs-codes/';
+    if (search) url += `?search=${encodeURIComponent(search)}`;
+    
+    const res = await fetch(url);
+    const data = await res.json();
+    
+    if (!data.length) {
+        document.getElementById('hs-codes-list').innerHTML = '<p class="text-slate-400 text-center">No HS codes found</p>';
+        return;
+    }
+    
+    document.getElementById('hs-codes-list').innerHTML = `
+        <table class="w-full text-sm">
+            <thead class="bg-slate-50 text-xs">
+                <tr>
+                    <th class="px-4 py-2 text-left">Code</th>
+                    <th class="px-4 py-2 text-left">Description</th>
+                    <th class="px-4 py-2 text-right">CD%</th>
+                    <th class="px-4 py-2 text-right">RD%</th>
+                    <th class="px-4 py-2 text-right">SD%</th>
+                    <th class="px-4 py-2 text-right">VAT%</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${data.map(hs => `
+                <tr class="border-t cursor-pointer hover:bg-slate-50" onclick="document.getElementById('hs-code').value='${hs.code}'">
+                    <td class="px-4 py-2 font-mono font-bold text-indigo-600">${hs.code}</td>
+                    <td class="px-4 py-2">${hs.description || '-'}</td>
+                    <td class="px-4 py-2 text-right font-mono">${hs.cd}</td>
+                    <td class="px-4 py-2 text-right font-mono">${hs.rd}</td>
+                    <td class="px-4 py-2 text-right font-mono">${hs.sd}</td>
+                    <td class="px-4 py-2 text-right font-mono">${hs.vat}</td>
+                </tr>
+                `).join('')}
+            </tbody>
+        </table>
+    `;
+}
+
+document.addEventListener('DOMContentLoaded', loadHSCodes);
+</script>
+{% endblock %}

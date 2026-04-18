@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}ERP Core - Dashboard{% endblock %}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        * { box-sizing: border-box; }
+        html, body { 
+            overflow-x: hidden; 
+            width: 100%;
+            max-width: 100vw;
+        }
+        .sidebar-link.active { background-color: #f1f5f9; color: #4f46e5; }
+        .sidebar-link:hover { background-color: #f8fafc; }
+    </style>
+</head>
+<body class="bg-slate-50 min-h-screen">
+    <div class="flex h-screen overflow-hidden">
+        <!-- Sidebar -->
+        <aside class="w-56 flex-shrink-0 bg-white border-r border-slate-200 hidden md:flex flex-col">
+            <div class="h-14 flex items-center px-4 border-b border-slate-100">
+                <div class="flex items-center gap-2">
+                    <div class="h-7 w-7 rounded bg-indigo-600 flex items-center justify-center">
+                        <span class="text-white font-bold text-sm">E</span>
+                    </div>
+                    <span class="text-lg font-bold text-slate-800">ERP</span>
+                </div>
+            </div>
+            <nav class="flex-1 p-3 space-y-0.5 overflow-y-auto">
+                <a href="/dashboard/" class="sidebar-link flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-md text-slate-600 {% if page == 'dashboard' %}active{% endif %}">
+                    <i class="fas fa-home w-4"></i> Dashboard
+                </a>
+                <a href="/dashboard/inventory/" class="sidebar-link flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-md text-slate-600 {% if page == 'inventory' %}active{% endif %}">
+                    <i class="fas fa-box w-4"></i> Inventory
+                </a>
+                <a href="/dashboard/bom/" class="sidebar-link flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-md text-slate-600 {% if page == 'bom' %}active{% endif %}">
+                    <i class="fas fa-sitemap w-4"></i> Bill of Materials
+                </a>
+                <a href="/dashboard/forecast/" class="sidebar-link flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-md text-slate-600 {% if page == 'forecast' %}active{% endif %}">
+                    <i class="fas fa-chart-line w-4"></i> Forecast
+                </a>
+                <a href="/dashboard/sales/" class="sidebar-link flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-md text-slate-600 {% if page == 'sales' %}active{% endif %}">
+                    <i class="fas fa-shopping-cart w-4"></i> Sales
+                </a>
+                <a href="/dashboard/valuation/" class="sidebar-link flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-md text-slate-600 {% if page == 'valuation' %}active{% endif %}">
+                    <i class="fas fa-gem w-4"></i> Stock Valuation
+                </a>
+                <a href="/dashboard/duty/" class="sidebar-link flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-md text-slate-600 {% if page == 'duty' %}active{% endif %}">
+                    <i class="fas fa-calculator w-4"></i> Duty Calculator
+                </a>
+                <a href="/dashboard/suppliers/" class="sidebar-link flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-md text-slate-600 {% if page == 'suppliers' %}active{% endif %}">
+                    <i class="fas fa-truck w-4"></i> Suppliers
+                </a>
+                <a href="/dashboard/production/" class="sidebar-link flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-md text-slate-600 {% if page == 'production' %}active{% endif %}">
+                    <i class="fas fa-cogs w-4"></i> Production
+                </a>
+            </nav>
+            <div class="p-3 border-t border-slate-100">
+                <div class="flex items-center gap-2 mb-2">
+                    <div class="h-7 w-7 rounded-full bg-slate-200 flex items-center justify-center">
+                        <i class="fas fa-user text-slate-500 text-xs"></i>
+                    </div>
+                    <div>
+                        <p class="text-xs font-medium text-slate-800">{{ user.username }}</p>
+                    </div>
+                </div>
+                <a href="/logout/" class="flex items-center gap-2 px-3 py-1.5 text-xs font-medium rounded-md text-red-500 hover:bg-red-50">
+                    <i class="fas fa-sign-out-alt w-4"></i> Sign Out
+                </a>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <div class="flex-1 flex flex-col overflow-hidden">
+            <header class="h-14 bg-white border-b border-slate-200 flex items-center justify-between px-4 md:px-6 flex-shrink-0">
+                <h1 class="text-base font-semibold text-slate-800">{% block page_title %}Dashboard{% endblock %}</h1>
+                <button class="p-2 rounded-lg hover:bg-slate-100 md:hidden">
+                    <i class="fas fa-bars text-slate-400"></i>
+                </button>
+            </header>
+
+            <main class="flex-1 overflow-auto p-4 md:p-6">
+                {% block main_content %}{% endblock %}
+            </main>
+        </div>
+    </div>
+
+    {% block scripts %}{% endblock %}
+</body>
+</html>

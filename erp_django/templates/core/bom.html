@@ -1,0 +1,469 @@
+{% extends "core/base.html" %}
+{% block title %}ERP - BoM{% endblock %}
+{% block page_title %}Bill of Materials{% endblock %}
+
+{% block main_content %}
+<div class="flex h-[calc(100vh-8rem)] gap-4">
+    <div class="w-80 flex-shrink-0 bg-white rounded-xl border flex flex-col">
+        <div class="flex border-b text-xs">
+            <button onclick="switchTab('fg')" id="tab-fg" class="flex-1 py-2 bg-indigo-50 font-bold border-b-2 border-indigo-500">Finished</button>
+            <button onclick="switchTab('sfg')" id="tab-sfg" class="flex-1 py-2 border-b-2 border-transparent">Semi</button>
+            <button onclick="switchTab('rm')" id="tab-rm" class="flex-1 py-2 border-b-2 border-transparent">Raw</button>
+        </div>
+        <div id="items-fg" class="flex-1 overflow-auto text-xs"><table class="w-full"><thead class="bg-slate-50 sticky top-0"><tr><th class="p-2 text-left">SKU</th><th class="p-2 text-left">Name</th><th class="p-2 text-left">Category</th></tr></thead><tbody id="table-fg"></tbody></table></div>
+        <div id="items-sfg" class="flex-1 overflow-auto text-xs hidden"><table class="w-full"><thead class="bg-slate-50 sticky top-0"><tr><th class="p-2 text-left">SKU</th><th class="p-2 text-left">Name</th><th class="p-2 text-left">Category</th></tr></thead><tbody id="table-sfg"></tbody></table></div>
+        <div id="items-rm" class="flex-1 overflow-auto text-xs hidden"><table class="w-full"><thead class="bg-slate-50 sticky top-0"><tr><th class="p-2 text-left">SKU</th><th class="p-2 text-left">Name</th><th class="p-2 text-left">Category</th></tr></thead><tbody id="table-rm"></tbody></table></div>
+        <div class="p-2 border-t flex gap-1 text-xs">
+            <button onclick="openAddBomModal()" class="flex-1 py-1.5 bg-emerald-600 text-white rounded">Add</button>
+            <button onclick="openBulkUploadModal()" class="flex-1 py-1.5 bg-blue-600 text-white rounded">Bulk</button>
+            <button onclick="openSmartUploadModal()" class="flex-1 py-1.5 bg-purple-600 text-white rounded">Smart</button>
+        </div>
+    </div>
+    <div class="flex-1 bg-white rounded-xl border flex flex-col">
+        <div class="p-3 border-b flex justify-between items-center">
+            <div><h3 id="selected-item-name" class="font-bold">Select item</h3><p id="selected-item-sku" class="text-xs text-slate-400"></p></div>
+            <div class="flex gap-2">
+                <button onclick="explodeSelected()" id="btn-explode" class="px-3 py-1.5 bg-indigo-600 text-white rounded text-xs" disabled>Explode</button>
+                <button onclick="whereUsedSelected()" id="btn-where-used" class="px-3 py-1.5 bg-amber-600 text-white rounded text-xs" disabled>Where Used</button>
+            </div>
+        </div>
+        <div id="bom-tree" class="flex-1 overflow-auto p-4">
+            <div class="flex items-center justify-center h-full text-slate-400"><div class="text-center"><i class="fas fa-sitemap text-4xl mb-2"></i><p>Select item from left</p></div></div>
+        </div>
+    </div>
+</div>
+
+<!-- Add Modal -->
+<div id="add-bom-modal" class="hidden fixed inset-0 bg-slate-900/50 z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-xl w-full max-w-md">
+        <div class="p-4 border-b flex justify-between"><h2 class="font-bold">Add BoM</h2><button onclick="closeAddBomModal()" class="text-2xl">&times;</button></div>
+        <div class="p-4 space-y-3">
+            <div><label class="text-xs font-bold">Parent *</label><select id="bom-parent" class="w-full border rounded p-2"></select></div>
+            <div><label class="text-xs font-bold">Component *</label><select id="bom-child" class="w-full border rounded p-2"></select></div>
+            <div><label class="text-xs font-bold">Quantity</label><input type="number" id="bom-quantity" value="1" step="0.0001" class="w-full border rounded p-2"></div>
+        </div>
+        <div class="p-4 border-t flex justify-end gap-2"><button onclick="closeAddBomModal()" class="px-4 py-2">Cancel</button><button onclick="saveBomEntry()" class="px-4 py-2 bg-indigo-600 text-white rounded">Save</button></div>
+    </div>
+</div>
+
+<!-- Bulk Modal -->
+<div id="bulk-upload-modal" class="hidden fixed inset-0 bg-slate-900/50 z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-xl w-full max-w-lg">
+        <div class="p-4 border-b flex justify-between"><h2 class="font-bold">Bulk Upload</h2><button onclick="closeBulkUploadModal()" class="text-2xl">&times;</button></div>
+        <div class="p-4"><button onclick="downloadBomTemplate()" class="px-4 py-2 bg-slate-600 text-white rounded mb-4">Template</button>
+            <div class="border-2 border-dashed border-slate-300 rounded-lg p-6 text-center">
+                <input type="file" id="bom-excel-upload" accept=".xlsx" onchange="handleBomUpload(event)" class="hidden">
+                <i class="fas fa-cloud-upload-alt text-4xl text-slate-400"></i>
+                <button onclick="document.getElementById('bom-excel-upload').click()" class="px-4 py-2 bg-blue-600 text-white rounded block mx-auto mt-2">Browse</button>
+            </div>
+            <div id="upload-progress" class="hidden mt-4 p-3 bg-blue-50 border rounded"><i class="fas fa-spinner fa-spin"></i> <span id="upload-status"></span></div>
+        </div>
+    </div>
+</div>
+
+<!-- Smart Modal -->
+<div id="smart-upload-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9999;align-items:center;justify-content:center;padding:20px;">
+    <div style="background:white;border-radius:12px;width:100%;max-width:800px;max-height:85vh;overflow:hidden;display:flex;flex-direction:column;">
+        <div style="padding:16px;border-bottom:1px solid #e2e8f0;display:flex;justify-content:space-between;align-items:center;">
+            <div><h2 style="font-size:18px;font-weight:bold;">Smart Upload - Verify</h2><p style="font-size:11px;color:#64748b;">A1=Parent, Col D=Comp, Col G=Qty</p></div>
+            <button onclick="closeSmartUploadModal()" style="font-size:24px;background:none;border:none;cursor:pointer;">&times;</button>
+        </div>
+        <div id="smart-step1" style="padding:16px;">
+            <div style="border:2px dashed #c4b5fd;border-radius:8px;padding:24px;text-align:center;">
+                <input type="file" id="smart-excel-upload" accept=".xlsx" onchange="previewSmartUpload(event)" style="display:none;">
+                <i class="fas fa-file-excel" style="font-size:36px;color:#a78bfa;display:block;margin:0 auto 8px;"></i>
+                <p>Upload Excel with multiple sheets</p>
+                <button onclick="document.getElementById('smart-excel-upload').click()" style="padding:8px 16px;background:#9333ea;color:white;border:none;border-radius:6px;cursor:pointer;margin-top:8px;">Select File</button>
+            </div>
+        </div>
+        <div id="smart-step2" style="display:none;flex:1;overflow:hidden;padding:16px;">
+            <div id="preview-container" style="flex:1;overflow-y:auto;max-height:60vh;"></div>
+            <div style="display:flex;gap:8px;margin-top:12px;">
+                <button onclick="resetSmartUpload()" style="padding:8px 16px;border:1px solid #cbd5e1;border-radius:6px;">Back</button>
+                <button onclick="confirmSmartUpload()" style="padding:8px 16px;background:#22c55e;color:white;border:none;border-radius:6px;">Confirm Upload</button>
+            </div>
+        </div>
+        <div id="smart-step3" style="display:none;padding:24px;text-align:center;">
+            <i class="fas fa-spinner fa-spin" style="font-size:36px;color:#9333ea;"></i>
+            <p id="smart-status" style="margin-top:12px;">Processing...</p>
+        </div>
+        <div id="smart-step4" style="display:none;padding:16px;overflow:auto;">
+            <div id="sheet-results"></div>
+            <button onclick="closeSmartUploadModal()" style="margin-top:12px;padding:8px 16px;background:#9333ea;color:white;border:none;border-radius:6px;">Close</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}{% csrf_token %}<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script><script>
+var allItems = [];
+var selectedItemId = null;
+var selectedCategory = null;
+var currentTab = 'fg';
+var smartWorkbook = null;
+var parsedBomData = [];
+
+function getCSRFToken() {
+    var el = document.querySelector('[name=csrfmiddlewaretoken]');
+    return el ? el.value : (document.cookie.match(/csrftoken=([^;]+)/) || [''])[1];
+}
+var csrfToken = getCSRFToken();
+
+async function loadItems() {
+    var res = await fetch('/api/inventory/items/simple_list/');
+    var data = await res.json();
+    allItems = data;
+    renderTable('fg', data.filter(function(i){return i.major_category==='FINISHED GOODS'}));
+    renderTable('sfg', data.filter(function(i){return i.major_category==='SEMI-FINISHED GOODS'}));
+    renderTable('rm', data.filter(function(i){return i.major_category==='RAW MATERIAL'}));
+    var opts = data.map(function(i){return '<option value="'+i.id+'">'+i.sku+' - '+i.name+'</option>'}).join('');
+    document.getElementById('bom-parent').innerHTML = '<option value="">-- Select --</option>'+opts;
+    document.getElementById('bom-child').innerHTML = '<option value="">-- Select --</option>'+opts;
+}
+
+function renderTable(section, items) {
+    var tbody = document.getElementById('table-'+section);
+    if (!items.length) { tbody.innerHTML = '<tr><td colspan="2" class="p-4 text-center">No items</td></tr>'; return; }
+    tbody.innerHTML = items.map(function(item){var cat = item.major_category || 'RAW MATERIAL';return '<tr class="hover:bg-blue-50 cursor-pointer border-b border-slate-100" onclick="selectItem('+item.id+',\''+item.sku+'\',\''+item.name.replace(/'/g,"\\'")+'\',\''+cat+'\')"><td class="p-2 font-mono font-bold text-indigo-600">'+item.sku+'</td><td class="p-2">'+item.name+'</td><td class="p-2 text-xs text-slate-400">'+cat+'</td></tr>'}).join('');
+}
+
+function switchTab(tab) {
+    currentTab = tab;
+    ['fg','sfg','rm'].forEach(function(t){var btn=document.getElementById('tab-'+t);var cont=document.getElementById('items-'+t);if(t===tab){btn.className='flex-1 py-2 bg-indigo-50 font-bold border-b-2 border-indigo-500';cont.classList.remove('hidden');}else{btn.className='flex-1 py-2 border-b-2 border-transparent';cont.classList.add('hidden');}});
+}
+
+function selectItem(id, sku, name, category) {
+    selectedItemId = id;
+    selectedCategory = category;
+    document.getElementById('selected-item-name').textContent = name;
+    document.getElementById('selected-item-sku').textContent = sku;
+    document.getElementById('btn-explode').disabled = false;
+    document.getElementById('btn-where-used').disabled = false;
+    if (category === 'RAW MATERIAL') {
+        whereUsedSelected();
+    } else {
+        explodeSelected();
+    }
+}
+
+// Add Modal
+function openAddBomModal() { document.getElementById('add-bom-modal').classList.remove('hidden'); }
+function closeAddBomModal() { document.getElementById('add-bom-modal').classList.add('hidden'); }
+
+async function saveBomEntry() {
+    var parentId = document.getElementById('bom-parent').value;
+    var childId = document.getElementById('bom-child').value;
+    var qty = parseFloat(document.getElementById('bom-quantity').value) || 1;
+    if (!parentId || !childId || parentId===childId) { alert('Select different parent and component'); return; }
+    var res = await fetch('/api/bom/bulk_upload/',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrfToken},body:JSON.stringify({entries:[{parent_id:parentId,child_id:childId,quantity:qty}]}),credentials:'include'});
+    var result = await res.json();
+    if (result.created>0 || result.updated>0) { alert('Saved!'); closeAddBomModal(); explodeSelected(); }
+}
+
+// Bulk Upload
+function openBulkUploadModal() { document.getElementById('bulk-upload-modal').classList.remove('hidden'); }
+function closeBulkUploadModal() { document.getElementById('bulk-upload-modal').classList.add('hidden'); }
+
+function downloadBomTemplate() {
+    var ws = XLSX.utils.aoa_to_sheet([['Parent Item Code','Component Item Code','Quantity'],['FG001','RM001','1.0']]);
+    var wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb,ws,'BoM');
+    var blob = new Blob([XLSX.write(wb,{bookType:'xlsx',type:'array'})],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+    var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'bom_template.xlsx'; a.click();
+}
+
+async function handleBomUpload(event) {
+    var file = event.target.files[0];
+    if (!file) return;
+    var reader = new FileReader();
+    reader.onload = async function(e) {
+        var data = new Uint8Array(e.target.result);
+        var workbook = XLSX.read(data,{type:'array'});
+        var sheet = workbook.Sheets[workbook.SheetNames[0]];
+        var jsonData = XLSX.utils.sheet_to_json(sheet);
+        document.getElementById('upload-progress').classList.remove('hidden');
+        document.getElementById('upload-status').textContent = 'Processing '+jsonData.length+' entries...';
+        var skuToId = {}; allItems.forEach(function(i){skuToId[i.sku]=i.id;});
+        var entries = [];
+        for (var i=0;i<jsonData.length;i++) {
+            var row = jsonData[i];
+            var parentId = skuToId[row['Parent Item Code']];
+            var childId = skuToId[row['Component Item Code']];
+            var qty = parseFloat(row['Quantity']||row['quantity'])||1;
+            if (parentId && childId && parentId!==childId) entries.push({parent_id:parentId,child_id:childId,quantity:qty});
+        }
+        var created=0, updated=0;
+        for (var i=0;i<entries.length;i+=50) {
+            var batch = entries.slice(i,i+50);
+            var res = await fetch('/api/bom/bulk_upload/',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrfToken},body:JSON.stringify({entries:batch}),credentials:'include'});
+            var result = await res.json();
+            created += result.created||0;
+            updated += result.updated||0;
+            document.getElementById('upload-status').textContent = 'Uploaded '+(i+50)+'/'+entries.length+'...';
+        }
+        document.getElementById('upload-status').textContent = 'Done! Created:'+created+' Updated:'+updated;
+        setTimeout(function(){closeBulkUploadModal();if(selectedItemId) explodeSelected();},1500);
+    };
+    reader.readAsArrayBuffer(file);
+}
+
+// Smart Upload
+function openSmartUploadModal() { document.getElementById('smart-upload-modal').style.display='flex'; resetSmartUpload(); }
+function closeSmartUploadModal() { document.getElementById('smart-upload-modal').style.display='none'; resetSmartUpload(); }
+function resetSmartUpload() {
+    document.getElementById('smart-step1').style.display='block';
+    document.getElementById('smart-step2').style.display='none';
+    document.getElementById('smart-step3').style.display='none';
+    document.getElementById('smart-step4').style.display='none';
+    document.getElementById('smart-excel-upload').value = '';
+    smartWorkbook = null;
+    parsedBomData = [];
+}
+
+async function previewSmartUpload(event) {
+    var file = event.target.files[0];
+    if (!file) return;
+    var reader = new FileReader();
+    reader.onload = async function(e) {
+        var data = new Uint8Array(e.target.result);
+        smartWorkbook = XLSX.read(data,{type:'array'});
+        var sheetNames = smartWorkbook.SheetNames;
+        if (sheetNames.length===0) { alert('No sheets found'); return; }
+        var skuToId = {}; var skuToName = {};
+        allItems.forEach(function(i){skuToId[i.sku]=i.id; skuToName[i.sku]=i.name;});
+        parsedBomData = [];
+        var html = '';
+        for (var si=0; si<sheetNames.length; si++) {
+            var sheetName = sheetNames[si];
+            var sheet = smartWorkbook.Sheets[sheetName];
+            var jsonData = XLSX.utils.sheet_to_json(sheet,{header:1});
+            if (jsonData.length<2) continue;
+            var a1 = jsonData[0][0]?jsonData[0][0].toString():'';
+            var codeMatch = a1.match(/Item Code:\s*(\d+)/i);
+            var nameMatch = a1.match(/Item Name:\s*(.+)/i);
+            var parentCode = codeMatch ? codeMatch[1].trim() : null;
+            var parentName = nameMatch ? nameMatch[1].trim() : (skuToName[parentCode]||'');
+            var parentId = skuToId[parentCode];
+            if (!parentCode) continue;
+            var sheetHtml = '<div style="margin-bottom:16px;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;"><div style="background:#9333ea;color:white;padding:8px 12px;font-weight:bold;font-size:11px;">'+sheetName+' - <span style="font-weight:normal;">'+parentCode+' | '+parentName+'</span></div>';
+            sheetHtml += '<table style="width:100%;font-size:9px;border-collapse:collapse;"><thead style="background:#f1f5f9;"><tr><th style="padding:3px;border:1px solid #e2e8f0;">Comp Code</th><th style="padding:3px;border:1px solid #e2e8f0;width:100px;">Comp Name</th><th style="padding:3px;border:1px solid #e2e8f0;text-align:right;">Qty</th><th style="padding:3px;border:1px solid #e2e8f0;text-align:center;">OK</th></tr></thead><tbody>';
+            for (var i=1; i<jsonData.length; i++) {
+                var row = jsonData[i];
+                if (!row) continue;
+                var compCode = row[3]?row[3].toString().trim():null;
+                var qty = parseFloat(row[6])||1;
+                if (!compCode) continue;
+                var compId = skuToId[compCode];
+                var compName = skuToName[compCode]||'';
+                var isValid = parentId && compId && parentId!==compId;
+                parsedBomData.push({sheet:sheetName,parent_id:parentId,child_id:compId,quantity:qty,parentCode:parentCode,parentName:parentName,componentCode:compCode,componentName:compName,valid:isValid});
+                var rowStyle = !isValid?'background:#fee2e2;':'';
+                sheetHtml += '<tr style="'+rowStyle+'"><td style="padding:3px;border:1px solid #e2e8f0;font-weight:bold;color:#7c3aed;">'+compCode+'</td><td style="padding:3px;border:1px solid #e2e8f0;font-size:8px;">'+(compName||'-')+'</td><td style="padding:3px;border:1px solid #e2e8f0;text-align:right;font-family:monospace;">'+qty+'</td><td style="padding:3px;border:1px solid #e2e8f0;text-align:center;color:'+(isValid?'#22c55e':'#ef4444')+';font-weight:bold;">'+(isValid?'✓':'✗')+'</td></tr>';
+            }
+            sheetHtml += '</tbody></table></div>';
+            html += sheetHtml;
+        }
+        if (parsedBomData.length===0) { alert('No data found. Format: A1=Item Code, Col D=Component, Col G=Qty'); return; }
+        document.getElementById('preview-container').innerHTML = html;
+        document.getElementById('smart-step1').style.display='none';
+        document.getElementById('smart-step2').style.display='flex';
+    };
+    reader.readAsArrayBuffer(file);
+}
+
+async function confirmSmartUpload() {
+    var valid = parsedBomData.filter(function(e){return e.valid;});
+    if (valid.length===0) { alert('No valid entries. Items must exist in system.'); return; }
+    document.getElementById('smart-step2').style.display='none';
+    document.getElementById('smart-step3').style.display='block';
+    var statusEl = document.getElementById('smart-status');
+    var resultsEl = document.getElementById('sheet-results');
+    var sheetMap = {};
+    valid.forEach(function(e){if(!sheetMap[e.sheet]) sheetMap[e.sheet]=[]; sheetMap[e.sheet].push({parent_id:e.parent_id,child_id:e.child_id,quantity:e.quantity});});
+    var created=0, updated=0, report='';
+    var sheetNames = Object.keys(sheetMap);
+    for (var i=0; i<sheetNames.length; i++) {
+        var sheetName = sheetNames[i];
+        statusEl.textContent = 'Processing '+sheetName+'...';
+        var entries = sheetMap[sheetName];
+        var sCreated=0, sUpdated=0;
+        for (var j=0; j<entries.length; j+=50) {
+            var batch = entries.slice(j,j+50);
+            var res = await fetch('/api/bom/bulk_upload/',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrfToken},body:JSON.stringify({entries:batch}),credentials:'include'});
+            var result = await res.json();
+            sCreated += result.created||0;
+            sUpdated += result.updated||0;
+        }
+        created += sCreated;
+        updated += sUpdated;
+        report += '<div style="padding:4px 8px;border-bottom:1px solid #e2e8f0;"><b>'+sheetName+'</b>: Created '+sCreated+', Updated '+sUpdated+'</div>';
+    }
+    var invalid = parsedBomData.filter(function(e){return !e.valid;}).length;
+    report += '<div style="padding:8px;background:#f1f5f9;margin-top:8px;"><b>Total:</b> Created '+created+', Updated '+updated+(invalid>0?', Invalid '+invalid:'')+'</div>';
+    resultsEl.innerHTML = report;
+    document.getElementById('smart-step3').style.display='none';
+    document.getElementById('smart-step4').style.display='block';
+    if (selectedItemId) explodeSelected();
+}
+
+// BoM Tree
+async function explodeSelected() {
+    if (!selectedItemId) return;
+    var container = document.getElementById('bom-tree');
+    container.innerHTML = '<div class="text-center py-8 text-slate-400"><i class="fas fa-spinner fa-spin"></i> Loading...</div>';
+    
+    try {
+        var res = await fetch('/api/bom/explosion/?item_id='+selectedItemId);
+        if (!res.ok) {
+            var errText = await res.text();
+            container.innerHTML = '<div class="text-center py-8 text-red-500">Server Error: '+res.status+'<br><small>'+errText+'</small></div>';
+            return;
+        }
+        var data = await res.json();
+        
+        if (data.error) {
+            container.innerHTML = '<div class="text-center py-8 text-red-500">Error: '+data.error+'</div>';
+            return;
+        }
+        
+        if (!data.components || !data.components.length) { 
+            container.innerHTML = '<div class="text-center py-8 text-amber-500">No BoM found for this item.<br><small>Add BoM entries first using Smart Upload or Add button.</small></div>'; 
+            return; 
+        }
+        
+        var html = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;background:linear-gradient(135deg,#f5f3ff,#ede9fe);padding:12px 16px;border-radius:8px;border:1px solid #a78bfa;">';
+        html += '<div><span style="color:#64748b;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;">Total Cost</span><div style="font-size:22px;font-weight:700;color:#7c3aed;">৳'+Number(data.total_cost||0).toLocaleString(undefined,{minimumFractionDigits:2})+'</div></div>';
+        html += '<div style="text-align:right;"><span style="color:#64748b;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;">Components</span><div style="font-size:18px;font-weight:600;color:#475569;">'+data.components.length+'</div></div>';
+        html += '<div style="display:flex;gap:8px;"><button onclick="expandAllBoM()" class="px-3 py-1.5 bg-white border border-slate-300 rounded text-xs font-medium text-slate-600 hover:bg-slate-50 transition-colors">Expand All</button><button onclick="collapseAllBoM()" class="px-3 py-1.5 bg-white border border-slate-300 rounded text-xs font-medium text-slate-600 hover:bg-slate-50 transition-colors">Collapse</button></div>';
+        html += '</div>';
+        html += '<div style="border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.05);">';
+        html += '<div style="display:flex;align-items:center;padding:10px 16px 10px 40px;background:#f1f5f9;border-bottom:2px solid #e2e8f0;font-size:11px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;">';
+        html += '<div style="flex:1;">Item</div>';
+        html += '<div style="display:flex;gap:20px;flex-shrink:0;padding-left:12px;">';
+        html += '<div style="width:60px;text-align:right;">Qty</div>';
+        html += '<div style="width:70px;text-align:right;">Rate</div>';
+        html += '<div style="width:80px;text-align:right;">Value</div>';
+        html += '<div style="width:70px;text-align:right;">Stock</div>';
+        html += '</div>';
+        html += '</div>';
+        html += renderBoM(data, 0);
+        html += '</div>';
+        container.innerHTML = html;
+    } catch(err) {
+        container.innerHTML = '<div class="text-center py-8 text-red-500">Error: '+err.message+'</div>';
+    }
+}
+
+function renderBoM(node, level, isChild) {
+    var item = (isChild || !node.item) ? node : node.item;
+    var indent = level * 24;
+    var myComponents = node.sub_components || node.components || [];
+    var hasChildren = myComponents.length > 0;
+    var isRoot = !isChild;
+    var uniqueId = 'bom-' + (item.sku || item.id) + '-' + level;
+    var borderCol = isRoot ? '#9333ea' : (level === 1 ? '#3b82f6' : '#64748b');
+    var icon = hasChildren 
+        ? '<span id="icon-'+uniqueId+'" class="cursor-pointer text-slate-400 hover:text-slate-600 transition-transform" onclick="toggleBoM(\''+uniqueId+'\')"><i class="fas fa-chevron-right text-xs"></i></span>' 
+        : '<span class="text-emerald-500"><i class="fas fa-check-circle text-xs"></i></span>';
+    var bg = isRoot ? '#f5f3ff' : (level % 2 === 0 ? '#f8fafc' : '#ffffff');
+    var stock = item.current_stock || 0;
+    var stockClass = stock <= 0 ? 'text-red-600' : (stock < item.quantity ? 'text-amber-600' : 'text-emerald-600');
+    var cost = item.cost || 0;
+    var isSFG = item.category && item.category.toUpperCase().indexOf('SEMI') >= 0;
+    var categoryBadge = isSFG ? '<span style="font-size:9px;background:#dbeafe;color:#1d4ed8;padding:1px 5px;border-radius:3px;margin-left:4px;">SFG</span>' : '';
+    
+    var qty = item.quantity || 1;
+    var unitPrice = item.unit_price || 0;
+    var totalValue = qty * unitPrice;
+    
+    var html = '<div class="bom-row" id="row-'+uniqueId+'" style="background:'+bg+';display:flex;align-items:center;padding:10px 16px 10px '+(indent+16)+'px;border-left:3px solid '+borderCol+';border-bottom:1px solid #f1f5f9;">';
+    html += '<div style="width:16px;text-align:center;margin-right:10px;flex-shrink:0;">'+icon+'</div>';
+    html += '<div style="flex:1;min-width:0;display:flex;align-items:center;gap:12px;">';
+    html += '<span style="font-weight:600;font-size:12px;font-family:monospace;background:#f1f5f9;padding:3px 8px;border-radius:4px;color:'+borderCol+';">'+item.sku+'</span>';
+    html += '<span style="color:#334155;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:320px;">'+item.name+categoryBadge+'</span>';
+    html += '</div>';
+    html += '<div style="display:flex;gap:20px;flex-shrink:0;padding-left:12px;font-size:12px;font-family:monospace;">';
+    html += '<div style="width:60px;text-align:right;color:#475569;"><span style="font-weight:600;">'+qty+'</span></div>';
+    html += '<div style="width:70px;text-align:right;color:#475569;">৳'+unitPrice.toFixed(2)+'</div>';
+    html += '<div style="width:80px;text-align:right;color:#7c3aed;font-weight:600;">৳'+totalValue.toFixed(2)+'</div>';
+    if (item.current_stock !== undefined) {
+        html += '<div style="width:70px;text-align:right;" class="'+stockClass+'"><span style="font-weight:600;">'+stock+'</span></div>';
+    }
+    html += '</div>';
+    html += '</div>';
+    
+    if (hasChildren) {
+        html += '<div id="children-'+uniqueId+'" class="bom-children" style="display:none;margin-left:16px;padding-left:12px;border-left:1px dashed #cbd5e1;">';
+        for (var ci = 0; ci < myComponents.length; ci++) {
+            var childNode = myComponents[ci];
+            html += renderBoM({item: childNode, components: childNode.sub_components || [], sub_components: childNode.sub_components || []}, level + 1, false);
+        }
+        html += '</div>';
+    }
+    return html;
+}
+
+function toggleBoM(id) {
+    var icon = document.getElementById('icon-'+id);
+    var children = document.getElementById('children-'+id);
+    if (!children) return;
+    var isOpen = children.style.display !== 'none';
+    children.style.display = isOpen ? 'none' : 'block';
+    if (icon) {
+        icon.style.transform = isOpen ? 'rotate(0deg)' : 'rotate(90deg)';
+    }
+}
+
+async function whereUsedSelected() {
+    if (!selectedItemId) return;
+    var res = await fetch('/api/bom/where_used/?child_id='+selectedItemId);
+    var data = await res.json();
+    var container = document.getElementById('bom-tree');
+    if (!data.length) { container.innerHTML = '<div class="text-center py-8 text-slate-400">Not used in any BoM</div>'; return; }
+    var html = '<div style="background:linear-gradient(135deg,#fef3c7,#fde68a);padding:12px 16px;border-radius:8px;border:1px solid #f59e0b;margin-bottom:16px;">';
+    html += '<div style="font-size:11px;color:#92400e;text-transform:uppercase;letter-spacing:0.5px;">Raw Material Used In</div>';
+    html += '<div style="font-size:20px;font-weight:700;color:#b45309;">'+data.length+' Product(s)</div>';
+    html += '</div>';
+    html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;">';
+    for (var i = 0; i < data.length; i++) {
+        var d = data[i];
+        var stockVal = d.current_stock || 0;
+        var stockStatus = stockVal <= 0 ? 'color:#dc2626;background:#fef2f2;' : (stockVal < (d.quantity_needed || 1) * 10 ? 'color:#d97706;background:#fffbeb;' : 'color:#16a34a;background:#f0fdf4;');
+        var sku = d.parent_sku || '';
+        var name = d.parent_name || '';
+        var qty = d.quantity_needed || 0;
+        html += '<div onclick="selectItem('+d.parent_id+',\''+sku.replace(/'/g,"")+'\',\''+name.replace(/'/g,"")+'\',\'FINISHED GOODS\')" style="cursor:pointer;background:white;border-radius:8px;border:1px solid #e2e8f0;padding:12px;transition:all 0.2s;" onmouseover="this.style.boxShadow=\'0 4px 12px rgba(0,0,0,0.1)\'" onmouseout="this.style.boxShadow=\'none\'">';
+        html += '<div style="display:flex;justify-content:space-between;margin-bottom:8px;">';
+        html += '<span style="font-weight:600;font-size:12px;background:#f1f5f9;padding:3px 8px;border-radius:4px;color:#7c3aed;">'+sku+'</span>';
+        html += '<span style="font-size:10px;padding:2px 6px;border-radius:4px;'+stockStatus+'">Stock: '+stockVal+'</span>';
+        html += '</div>';
+        html += '<div style="color:#334155;font-size:12px;margin-bottom:10px;line-height:1.3;">'+name+'</div>';
+        html += '<div style="display:flex;justify-content:space-between;font-size:11px;color:#64748b;border-top:1px solid #f1f5f9;padding-top:8px;">';
+        html += '<div><span style="color:#94a3b8;font-size:9px;">Qty/Unit</span><div style="font-weight:600;">'+qty+'</div></div>';
+        html += '<div style="color:#7c3aed;font-weight:600;">View BoM <i class="fas fa-chevron-right"></i></div>';
+        html += '</div>';
+        html += '</div>';
+    }
+    html += '</div>';
+    container.innerHTML = html;
+}
+
+function expandAllBoM() {
+    document.querySelectorAll('.bom-children').forEach(function(el) {
+        el.style.display = 'block';
+    });
+    document.querySelectorAll('[id^="icon-bom-"]').forEach(function(el) {
+        el.style.transform = 'rotate(90deg)';
+    });
+}
+function collapseAllBoM() {
+    document.querySelectorAll('.bom-children').forEach(function(el) {
+        el.style.display = 'none';
+    });
+    document.querySelectorAll('[id^="icon-bom-"]').forEach(function(el) {
+        el.style.transform = 'rotate(0deg)';
+    });
+}
+
+document.addEventListener('DOMContentLoaded', loadItems);
+</script>{% endblock %}

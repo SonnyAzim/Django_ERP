@@ -1,0 +1,537 @@
+{% extends "core/base.html" %}
+
+{% block title %}ERP Core - Inventory{% endblock %}
+{% block page_title %}Inventory Management{% endblock %}
+
+{% block main_content %}
+<div class="mb-4 flex flex-wrap gap-2 items-center">
+    <input type="text" id="search" placeholder="Search..." 
+           class="w-40 md:w-56 rounded border border-slate-200 px-3 py-1.5 text-sm focus:ring-2 focus:ring-indigo-500 outline-none">
+    <select id="category-filter" class="rounded border border-slate-200 px-3 py-1.5 text-sm">
+        <option value="">All Categories</option>
+        <option value="RAW MATERIAL">Raw Material</option>
+        <option value="PACKAGING MATERIAL">Packaging Material</option>
+        <option value="SEMI-FINISHED GOODS">Semi-Finished</option>
+        <option value="FINISHED GOODS">Finished Goods</option>
+    </select>
+    <button onclick="loadItems()" class="px-3 py-1.5 bg-indigo-600 text-white rounded text-sm hover:bg-indigo-700">
+        <i class="fas fa-search mr-1"></i>Search
+    </button>
+    <button onclick="openAddModal()" class="px-3 py-1.5 bg-emerald-600 text-white rounded text-sm hover:bg-emerald-700">
+        <i class="fas fa-plus mr-1"></i>Add
+    </button>
+    
+    <!-- Bulk Upload Section -->
+    <div class="flex gap-1.5 ml-auto">
+        <button onclick="downloadTemplate()" class="px-2 py-1.5 bg-slate-600 text-white rounded text-xs hover:bg-slate-700">
+            <i class="fas fa-download mr-1"></i>Template
+        </button>
+        <div class="relative">
+            <input type="file" id="excel-upload" accept=".xlsx,.xls,.csv" onchange="handleExcelUpload(event)" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer">
+            <button class="px-2 py-1.5 bg-blue-600 text-white rounded text-xs hover:bg-blue-700">
+                <i class="fas fa-upload mr-1"></i>New
+            </button>
+        </div>
+        <div class="relative">
+            <input type="file" id="stock-upload" accept=".xlsx,.xls,.csv" onchange="handleStockUpdate(event)" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer">
+            <button class="px-2 py-1.5 bg-amber-600 text-white rounded text-xs hover:bg-amber-700">
+                <i class="fas fa-sync mr-1"></i>Stock
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Upload Progress -->
+<div id="upload-progress" class="hidden mb-3 p-2 bg-blue-50 border border-blue-200 rounded text-sm">
+    <i class="fas fa-spinner fa-spin text-blue-600 mr-2"></i>
+    <span id="upload-status">Processing...</span>
+</div>
+
+<div class="bg-white rounded-xl border border-slate-200 overflow-x-auto">
+    <table class="w-full min-w-[800px]">
+        <thead class="bg-slate-50 text-xs font-bold text-slate-400 uppercase">
+            <tr>
+                <th class="px-3 py-2.5 text-left whitespace-nowrap">SKU</th>
+                <th class="px-3 py-2.5 text-left whitespace-nowrap">Name</th>
+                <th class="px-3 py-2.5 text-left whitespace-nowrap">Major</th>
+                <th class="px-3 py-2.5 text-left whitespace-nowrap">Minor</th>
+                <th class="px-3 py-2.5 text-right whitespace-nowrap">Stock</th>
+                <th class="px-3 py-2.5 text-right whitespace-nowrap">Price</th>
+                <th class="px-3 py-2.5 text-left whitespace-nowrap">Source</th>
+                <th class="px-3 py-2.5 text-center whitespace-nowrap">Actions</th>
+            </tr>
+        </thead>
+        <tbody id="items-table" class="divide-y divide-slate-100 text-sm">
+            <tr><td colspan="8" class="py-8 text-center text-slate-400">Loading...</td></tr>
+        </tbody>
+    </table>
+</div>
+
+<div class="mt-4 flex justify-center gap-2" id="pagination"></div>
+
+<!-- Add/Edit Modal -->
+<div id="item-modal" class="hidden fixed inset-0 bg-slate-900/50 z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+        <div class="p-6 border-b border-slate-100 flex justify-between items-center">
+            <h2 class="text-xl font-bold" id="modal-title">Add New Item</h2>
+            <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600 text-2xl">&times;</button>
+        </div>
+        <form id="item-form" class="p-6 space-y-4">
+            <input type="hidden" id="item-id">
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-xs font-bold text-slate-400 uppercase mb-1">SKU *</label>
+                    <input type="text" id="item-sku" required class="w-full rounded-lg border border-slate-200 p-2">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-400 uppercase mb-1">Name *</label>
+                    <input type="text" id="item-name" required class="w-full rounded-lg border border-slate-200 p-2">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-400 uppercase mb-1">Category</label>
+                    <select id="item-category" class="w-full rounded-lg border border-slate-200 p-2">
+                        <option value="RAW MATERIAL">RAW MATERIAL</option>
+                        <option value="PACKAGING MATERIAL">PACKAGING MATERIAL</option>
+                        <option value="SEMI-FINISHED GOODS">SEMI-FINISHED GOODS</option>
+                        <option value="FINISHED GOODS">FINISHED GOODS</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-400 uppercase mb-1">Unit</label>
+                    <input type="text" id="item-unit" value="PCS" class="w-full rounded-lg border border-slate-200 p-2">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-400 uppercase mb-1">Stock</label>
+                    <input type="number" step="0.01" id="item-stock" value="0" class="w-full rounded-lg border border-slate-200 p-2">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-400 uppercase mb-1">Price (BDT)</label>
+                    <input type="number" step="0.01" id="item-price" value="0" class="w-full rounded-lg border border-slate-200 p-2">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-400 uppercase mb-1">Source</label>
+                    <select id="item-source" class="w-full rounded-lg border border-slate-200 p-2">
+                        <option value="local">Local</option>
+                        <option value="foreign">Foreign</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-400 uppercase mb-1">Type</label>
+                    <select id="item-type" class="w-full rounded-lg border border-slate-200 p-2">
+                        <option value="component">Component</option>
+                        <option value="product">Product</option>
+                    </select>
+                </div>
+            </div>
+        </form>
+        <div class="p-6 border-t border-slate-100 flex justify-end gap-3">
+            <button onclick="closeModal()" class="px-4 py-2 text-sm font-bold text-slate-500 hover:text-slate-700">Cancel</button>
+            <button onclick="saveItem()" class="px-6 py-2 bg-indigo-600 text-white rounded-lg text-sm font-bold hover:bg-indigo-700">Save</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{% csrf_token %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script>
+let currentPage = 1;
+const pageSize = 25;
+
+function getCSRFToken() {
+    var csrfTokenEl = document.querySelector('[name=csrfmiddlewaretoken]');
+    if (csrfTokenEl) {
+        return csrfTokenEl.value;
+    }
+    return document.cookie.match(/csrftoken=([^;]+)/)?.[1] || '';
+}
+
+const csrfToken = getCSRFToken();
+console.log('CSRF Token loaded:', csrfToken ? 'Yes' : 'No');
+
+async function loadItems() {
+    const search = document.getElementById('search').value;
+    const category = document.getElementById('category-filter').value;
+    
+    let url = `/api/inventory/items/?page=${currentPage}&page_size=${pageSize}`;
+    if (search) url += `&search=${encodeURIComponent(search)}`;
+    if (category) url += `&major_category=${encodeURIComponent(category)}`;
+    
+    try {
+        const res = await fetch(url);
+        const data = await res.json();
+        
+        const tbody = document.getElementById('items-table');
+        if (!data.results || !data.results.length) {
+            tbody.innerHTML = '<tr><td colspan="8" class="py-8 text-center text-slate-400">No items found</td></tr>';
+            return;
+        }
+        
+        tbody.innerHTML = data.results.map(item => {
+            const stock = Number(item.current_stock) || 0;
+            const price = Number(item.price) || 0;
+            return `
+            <tr class="hover:bg-slate-50">
+                <td class="px-3 py-2 font-mono text-xs font-bold text-indigo-600 whitespace-nowrap">${item.sku || ''}</td>
+                <td class="px-3 py-2 whitespace-nowrap">${item.name || ''}</td>
+                <td class="px-3 py-2 whitespace-nowrap"><span class="px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 text-xs font-bold">${item.major_category || '-'}</span></td>
+                <td class="px-3 py-2 text-xs whitespace-nowrap">${item.minor_category || '-'}</td>
+                <td class="px-3 py-2 text-right font-mono whitespace-nowrap">${stock.toFixed(0)}</td>
+                <td class="px-3 py-2 text-right font-mono whitespace-nowrap">৳${price.toFixed(0)}</td>
+                <td class="px-3 py-2 whitespace-nowrap"><span class="px-1.5 py-0.5 rounded text-xs font-bold uppercase ${item.source === 'foreign' ? 'bg-blue-100 text-blue-800' : 'bg-amber-100 text-amber-800'}">${item.source || 'local'}</span></td>
+                <td class="px-3 py-2 text-center whitespace-nowrap">
+                    <button onclick="editItem(${item.id})" class="p-1 rounded hover:bg-blue-100 text-blue-600" title="Edit"><i class="fas fa-edit text-xs"></i></button>
+                    <button onclick="deleteItem(${item.id})" class="p-1 rounded hover:bg-red-100 text-red-600" title="Delete"><i class="fas fa-trash text-xs"></i></button>
+                </td>
+            </tr>
+        `}).join('');
+        
+        updatePagination(data);
+    } catch (err) {
+        console.error('Error loading items:', err);
+    }
+}
+
+function updatePagination(data) {
+    const total = data.count || 0;
+    const totalPages = Math.ceil(total / pageSize);
+    const container = document.getElementById('pagination');
+    
+    if (totalPages <= 1) { container.innerHTML = ''; return; }
+    
+    let html = `<button onclick="goToPage(${currentPage - 1})" ${currentPage === 1 ? 'disabled' : ''} class="px-3 py-1 rounded border hover:bg-slate-50 disabled:opacity-50">Prev</button>`;
+    for (let i = 1; i <= totalPages; i++) {
+        html += `<button onclick="goToPage(${i})" class="px-3 py-1 rounded border ${i === currentPage ? 'bg-indigo-600 text-white' : 'hover:bg-slate-50'}">${i}</button>`;
+    }
+    html += `<button onclick="goToPage(${currentPage + 1})" ${currentPage === totalPages ? 'disabled' : ''} class="px-3 py-1 rounded border hover:bg-slate-50 disabled:opacity-50">Next</button>`;
+    container.innerHTML = html;
+}
+
+function goToPage(page) {
+    currentPage = page;
+    loadItems();
+}
+
+function downloadTemplate() {
+    const template = [
+        ['SL', 'Major Category', 'Minor Category', 'Item Group', 'Fiscal Category', 'Item Code', 'Item Name', 'UOM', 'Current Stock', 'Price', 'Source', 'Lead Time'],
+        ['1', 'RAW MATERIAL', 'METAL', 'MATERIALS', 'RAW MATERIAL', 'RM2002', 'Stainless Steel Sheet', 'KG', '500', '15.75', 'foreign', '120'],
+        ['2', 'PACKAGING MATERIAL', 'BOX', 'PACKAGING', 'PM', 'PM001', 'Cardboard Box', 'PCS', '1000', '2.50', 'local', '7'],
+        ['3', 'SEMI-FINISHED GOODS', 'SUB-ASSEMBLY', 'ASSEMBLY', 'SFG', 'SFG001', 'Motor Assembly', 'PCS', '50', '45.00', 'local', '0'],
+        ['4', 'FINISHED GOODS', 'ELECTRONICS', 'PRODUCTS', 'FG', 'FG001', 'Smart Watch', 'PCS', '25', '150.00', 'foreign', '90']
+    ];
+    
+    const ws = XLSX.utils.aoa_to_sheet(template);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Items');
+    
+    const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+    const blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'inventory_template.xlsx';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+}
+
+function handleExcelUpload(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+        try {
+            const data = new Uint8Array(e.target.result);
+            const workbook = XLSX.read(data, { type: 'array' });
+            const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+            
+            // Use sheet_to_json with headers to get proper column mapping
+            const jsonData = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
+            
+            if (jsonData.length < 2) {
+                alert('No data found in the file');
+                return;
+            }
+            
+            // Clean headers - handle tabs, multiple spaces, newlines
+            const rawHeaders = jsonData[0];
+            console.log('Raw headers:', rawHeaders);
+            const headers = rawHeaders.map((h, idx) => {
+                const cleaned = (h || '').toString().trim().replace(/[\t\n\r]+/g, ' ').replace(/\s+/g, ' ').toLowerCase();
+                return cleaned;
+            });
+            console.log('Cleaned headers:', headers);
+            
+            const items = [];
+            for (let i = 1; i < jsonData.length; i++) {
+                const row = jsonData[i];
+                if (!row || row.length === 0) continue;
+                
+                const skuIdx = headers.indexOf('item code');
+                const nameIdx = headers.indexOf('item name');
+                const catIdx = headers.indexOf('major category');
+                const stockIdx = headers.indexOf('current stock');
+                const priceIdx = headers.indexOf('price');
+                const sourceIdx = headers.indexOf('source');
+                const unitIdx = headers.indexOf('uom');
+                const minorIdx = headers.indexOf('minor category');
+                const groupIdx = headers.indexOf('item group');
+                const fiscalIdx = headers.indexOf('fiscal category');
+                const leadIdx = headers.indexOf('lead time');
+                
+                const sku = skuIdx >= 0 ? row[skuIdx]?.toString().trim() : null;
+                const name = nameIdx >= 0 ? row[nameIdx]?.toString().trim() : null;
+                
+                if (i === 1) {
+                    console.log('First row raw:', JSON.stringify(row));
+                    console.log('Indices - SKU:', skuIdx, 'Name:', nameIdx, 'Cat:', catIdx, 'Stock:', stockIdx, 'Price:', priceIdx, 'Source:', sourceIdx);
+                }
+                if (!sku && !name) continue;
+                
+                const rawCat = catIdx >= 0 ? row[catIdx]?.toString().trim().toUpperCase() : 'RAW MATERIAL';
+                let majorCategory = rawCat;
+                if (rawCat === 'RAW MATERIALS') majorCategory = 'RAW MATERIAL';
+                if (rawCat === 'SEMI FINISH' || rawCat === 'SEMI FINISHED') majorCategory = 'SEMI-FINISHED GOODS';
+                if (rawCat === 'FINISH GOODS' || rawCat === 'FINISHED') majorCategory = 'FINISHED GOODS';
+                
+                const type = (majorCategory.includes('FINISHED') || majorCategory.includes('FG')) ? 'product' : 'component';
+                const source = sourceIdx >= 0 && row[sourceIdx]?.toString().trim().toLowerCase() === 'foreign' ? 'foreign' : 'local';
+                
+                let leadTime = undefined;
+                if (leadIdx >= 0 && row[leadIdx]) {
+                    const ltStr = row[leadIdx].toString().replace(/[^\d]/g, '');
+                    leadTime = parseInt(ltStr) || undefined;
+                }
+                
+                const itemData = {
+                    sku: sku || `AUTO-${i}`,
+                    name: name || sku || 'Unnamed',
+                    major_category: majorCategory,
+                    minor_category: minorIdx >= 0 ? row[minorIdx]?.toString().trim() || '' : '',
+                    item_group: groupIdx >= 0 ? row[groupIdx]?.toString().trim() || '' : '',
+                    fiscal_category: fiscalIdx >= 0 ? row[fiscalIdx]?.toString().trim() || '' : '',
+                    unit: unitIdx >= 0 ? row[unitIdx]?.toString().trim() || 'PCS' : 'PCS',
+                    current_stock: stockIdx >= 0 ? parseFloat(row[stockIdx]) || 0 : 0,
+                    price: priceIdx >= 0 ? parseFloat(row[priceIdx]) || 0 : 0,
+                    source: source,
+                    type: type,
+                    lead_time_days: leadTime
+                };
+                
+                if (i === 1) console.log('First item parsed:', itemData);
+                items.push(itemData);
+            }
+            
+            if (items.length === 0) {
+                alert('No valid items found in the file');
+                return;
+            }
+            
+            console.log('Parsed items:', items.length);
+            
+            const progressDiv = document.getElementById('upload-progress');
+            const statusSpan = document.getElementById('upload-status');
+            progressDiv.classList.remove('hidden');
+            statusSpan.textContent = `Uploading ${items.length} items...`;
+            
+            console.log('Sending to:', '/api/inventory/items/bulk_upload/');
+            console.log('CSRF Token:', csrfToken);
+            
+            const res = await fetch('/api/inventory/items/bulk_upload/', {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken
+                },
+                body: JSON.stringify({ items: items }),
+                credentials: 'include'
+            });
+            
+            console.log('Response status:', res.status);
+            
+            const result = await res.json();
+            console.log('Upload result:', result);
+            
+            if (result.success === false) {
+                statusSpan.textContent = 'Error: ' + (result.error || result.details || JSON.stringify(result));
+                if (result.errors) {
+                    console.log('Errors:', result.errors);
+                }
+            } else {
+                statusSpan.textContent = `Created: ${result.created || 0}, Updated: ${result.updated || 0}`;
+            }
+            
+            setTimeout(() => {
+                progressDiv.classList.add('hidden');
+                loadItems();
+            }, 2000);
+            
+            event.target.value = '';
+            
+        } catch (err) {
+            console.error('Upload error:', err);
+            alert('Error processing file: ' + err.message);
+        }
+    };
+    reader.readAsArrayBuffer(file);
+}
+
+async function handleStockUpdate(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+        try {
+            const data = new Uint8Array(e.target.result);
+            const workbook = XLSX.read(data, { type: 'array' });
+            const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+            const jsonData = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
+            
+            if (jsonData.length < 2) {
+                alert('No data found in the file');
+                return;
+            }
+            
+            const headers = jsonData[0].map(h => h?.toString().trim().toLowerCase());
+            const skuIdx = headers.indexOf('item code');
+            const stockIdx = headers.indexOf('current stock');
+            const priceIdx = headers.indexOf('price');
+            
+            if (skuIdx < 0 || stockIdx < 0) {
+                alert('File must contain "Item Code" and "Current Stock" columns');
+                return;
+            }
+            
+            const updates = [];
+            for (let i = 1; i < jsonData.length; i++) {
+                const row = jsonData[i];
+                if (!row || row.length === 0) continue;
+                
+                const sku = skuIdx >= 0 ? row[skuIdx]?.toString().trim() : null;
+                if (!sku) continue;
+                
+                updates.push({
+                    sku: sku,
+                    quantity: stockIdx >= 0 ? parseFloat(row[stockIdx]) || 0 : 0,
+                    price: priceIdx >= 0 ? parseFloat(row[priceIdx]) || 0 : 0,
+                    note: 'Stock update via Excel'
+                });
+            }
+            
+            if (updates.length === 0) {
+                alert('No valid items found');
+                return;
+            }
+            
+            const progressDiv = document.getElementById('upload-progress');
+            const statusSpan = document.getElementById('upload-status');
+            progressDiv.classList.remove('hidden');
+            statusSpan.textContent = `Updating stock for ${updates.length} items...`;
+            
+            const res = await fetch('/api/inventory/items/bulk_upload/', {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken
+                },
+                body: JSON.stringify({ items: updates }),
+                credentials: 'include'
+            });
+            
+            const result = await res.json();
+            statusSpan.textContent = `Updated: ${result.updated || 0} items`;
+            
+            setTimeout(() => {
+                progressDiv.classList.add('hidden');
+                loadItems();
+            }, 1500);
+            
+            event.target.value = '';
+            
+        } catch (err) {
+            alert('Error processing file: ' + err.message);
+        }
+    };
+    reader.readAsArrayBuffer(file);
+}
+
+function openAddModal() {
+    document.getElementById('modal-title').textContent = 'Add New Item';
+    document.getElementById('item-form').reset();
+    document.getElementById('item-id').value = '';
+    document.getElementById('item-modal').classList.remove('hidden');
+}
+
+function editItem(id) {
+    fetch(`/api/inventory/items/${id}/`).then(r => r.json()).then(item => {
+        document.getElementById('modal-title').textContent = 'Edit Item';
+        document.getElementById('item-id').value = item.id;
+        document.getElementById('item-sku').value = item.sku || '';
+        document.getElementById('item-name').value = item.name || '';
+        document.getElementById('item-category').value = item.major_category || 'RAW MATERIAL';
+        document.getElementById('item-unit').value = item.unit || 'PCS';
+        document.getElementById('item-stock').value = item.current_stock || 0;
+        document.getElementById('item-price').value = item.price || 0;
+        document.getElementById('item-source').value = item.source || 'local';
+        document.getElementById('item-type').value = item.item_type || 'component';
+        document.getElementById('item-modal').classList.remove('hidden');
+    });
+}
+
+function closeModal() {
+    document.getElementById('item-modal').classList.add('hidden');
+}
+
+async function saveItem() {
+    const id = document.getElementById('item-id').value;
+    const data = {
+        sku: document.getElementById('item-sku').value,
+        name: document.getElementById('item-name').value,
+        major_category: document.getElementById('item-category').value,
+        unit: document.getElementById('item-unit').value,
+        current_stock: parseFloat(document.getElementById('item-stock').value) || 0,
+        price: parseFloat(document.getElementById('item-price').value) || 0,
+        source: document.getElementById('item-source').value,
+        item_type: document.getElementById('item-type').value,
+    };
+    
+    const url = id ? `/api/inventory/items/${id}/` : '/api/inventory/items/';
+    const method = id ? 'PUT' : 'POST';
+    
+    try {
+        const res = await fetch(url, {
+            method,
+            headers: { 
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
+            },
+            body: JSON.stringify(data),
+            credentials: 'include'
+        });
+        
+        if (res.ok) {
+            closeModal();
+            loadItems();
+        } else {
+            alert('Error saving item');
+        }
+    } catch (err) {
+        alert('Error: ' + err.message);
+    }
+}
+
+async function deleteItem(id) {
+    if (!confirm('Delete this item?')) return;
+    await fetch(`/api/inventory/items/${id}/`, { method: 'DELETE' });
+    loadItems();
+}
+
+document.addEventListener('DOMContentLoaded', loadItems);
+</script>
+{% endblock %}
