@@ -33,6 +33,45 @@ class ForecastListView(APIView):
         queryset = queryset.order_by('item__sku', 'month')
         serializer = ForecastSerializer(queryset, many=True)
         return Response(serializer.data)
+    
+    def post(self, request):
+        forecasts_data = []
+        
+        # Handle array format from bulk upload
+        if isinstance(request.data, list):
+            forecasts_data = request.data
+        elif isinstance(request.data, dict) and 'forecasts' in request.data:
+            forecasts_data = request.data['forecasts']
+        
+        created = 0
+        updated = 0
+        
+        for fc_data in forecasts_data:
+            item_id = fc_data.get('item')
+            month = fc_data.get('month')
+            quantity = fc_data.get('quantity', 0)
+            
+            if not item_id or not month:
+                continue
+            
+            try:
+                forecast, is_new = Forecast.objects.update_or_create(
+                    item_id=item_id,
+                    month=month,
+                    defaults={'quantity': quantity}
+                )
+                if is_new:
+                    created += 1
+                else:
+                    updated += 1
+            except Exception:
+                continue
+        
+        return Response({
+            'success': True,
+            'created': created,
+            'updated': updated
+        })
 
 
 class ForecastUploadView(APIView):
