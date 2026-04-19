@@ -51,17 +51,17 @@
                     <tr>
                         <th class="px-2 py-2 text-left sticky left-0 bg-slate-50">SKU</th>
                         <th class="px-2 py-2 text-left sticky left-12 bg-slate-50 w-48">Item Name</th>
-                        <th class="px-2 py-2 text-right">May 26</th>
-                        <th class="px-2 py-2 text-right">Jun 26</th>
-                        <th class="px-2 py-2 text-right">Jul 26</th>
-                        <th class="px-2 py-2 text-right">Aug 26</th>
-                        <th class="px-2 py-2 text-right">Sep 26</th>
-                        <th class="px-2 py-2 text-right">Oct 26</th>
-                        <th class="px-2 py-2 text-right">Nov 26</th>
-                        <th class="px-2 py-2 text-right">Dec 26</th>
-                        <th class="px-2 py-2 text-right">Jan 27</th>
-                        <th class="px-2 py-2 text-right">Feb 27</th>
-                        <th class="px-2 py-2 text-right">Mar 27</th>
+                        <th class="px-2 py-2 text-right">May-26</th>
+                        <th class="px-2 py-2 text-right">Jun-26</th>
+                        <th class="px-2 py-2 text-right">Jul-26</th>
+                        <th class="px-2 py-2 text-right">Aug-26</th>
+                        <th class="px-2 py-2 text-right">Sep-26</th>
+                        <th class="px-2 py-2 text-right">Oct-26</th>
+                        <th class="px-2 py-2 text-right">Nov-26</th>
+                        <th class="px-2 py-2 text-right">Dec-26</th>
+                        <th class="px-2 py-2 text-right">Jan-27</th>
+                        <th class="px-2 py-2 text-right">Feb-27</th>
+                        <th class="px-2 py-2 text-right">Mar-27</th>
                         <th class="px-2 py-2 text-right bg-indigo-100">Total</th>
                     </tr>
                 </thead>
@@ -204,15 +204,24 @@ async function loadAllForecasts() {
         byItem[f.item].months[f.month] = f.quantity;
     });
     
+// Month format mapping: "May-2026" -> "2026-05"
+    const monthMap = {
+        'May-2026': '2026-05', 'Jun-2026': '2026-06', 'Jul-2026': '2026-07',
+        'Aug-2026': '2026-08', 'Sep-2026': '2026-09', 'Oct-2026': '2026-10',
+        'Nov-2026': '2026-11', 'Dec-2026': '2026-12', 'Jan-2027': '2027-01',
+        'Feb-2027': '2027-02', 'Mar-2027': '2027-03'
+    };
     const months = ['2026-05', '2026-06', '2026-07', '2026-08', '2026-09', '2026-10', '2026-11', '2026-12', '2027-01', '2027-02', '2027-03'];
     
-    tbody.innerHTML = Object.values(byItem).map(item => {
-        let total = 0;
-        const totals = months.map(m => {
-            const qty = item.months[m] || 0;
-            total += qty;
-            return qty;
-        });
+    // Group by item
+    const byItem = {};
+    data.results.forEach(f => {
+        if (!byItem[f.item]) {
+            byItem[f.item] = { sku: f.item_sku, name: f.item_name, months: {} };
+        }
+        const monthKey = monthMap[f.month] || f.month;
+        byItem[f.item].months[monthKey] = f.quantity;
+    });
         
         return `<tr class="hover:bg-blue-50">
             <td class="px-2 py-2 font-mono font-bold text-indigo-600 sticky left-0 bg-white">${item.sku}</td>
