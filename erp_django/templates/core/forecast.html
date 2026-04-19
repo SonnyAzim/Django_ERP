@@ -119,7 +119,7 @@ async function loadItemOptions() {
     const select = document.getElementById('forecast-item');
     select.innerHTML = '<option value="">Loading...</option>';
     
-    const res = await fetch('/api/inventory/items/?major_category=FINISHED GOODS&page_size=500');
+    const res = await fetch('/api/inventory/items/?major_category=FINISHED%20GOODS&page_size=500');
     const data = await res.json();
     
     const options = '<option value="">Select Finished Good...</option>' + 

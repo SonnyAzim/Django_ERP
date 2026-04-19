@@ -113,6 +113,11 @@ class ItemViewSet(viewsets.ModelViewSet):
                 Q(name__icontains=search) | Q(sku__icontains=search)
             )
         
+        # Filter by major_category
+        major_category = self.request.query_params.get('major_category', None)
+        if major_category:
+            queryset = queryset.filter(major_category=major_category)
+        
         return queryset
 
     @action(detail=True, methods=['post'])
