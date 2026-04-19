@@ -4,7 +4,7 @@
 {% block page_title %}Forecast & MRP{% endblock %}
 
 {% block main_content %}
-<div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+<div class="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-6">
     <div class="bg-white rounded-xl border border-slate-200 p-6">
         <h3 class="text-lg font-bold text-slate-700 mb-4">Forecast Zone</h3>
         <p class="text-sm text-slate-500 mb-4">Enter monthly forecast quantities for Finished Goods items.</p>
@@ -16,7 +16,7 @@
             </select>
         </div>
         
-        <div id="forecast-inputs" class="space-y-2 mb-4"></div>
+        <div id="forecast-inputs" class="space-y-2 mb-4 max-h-64 overflow-y-auto"></div>
         
         <div class="flex gap-2">
             <button onclick="saveForecasts()" class="flex-1 px-3 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 text-sm">
@@ -31,45 +31,53 @@
         </div>
     </div>
     
-    <div class="bg-white rounded-xl border border-slate-200 p-6">
-        <h3 class="text-lg font-bold text-slate-700 mb-4">Forecast Chart</h3>
-        <p class="text-sm text-slate-500 mb-4">Monthly forecast overview for all Finished Goods.</p>
-        
-        <div class="mb-4">
-            <label class="block text-xs font-medium text-slate-600 mb-1">Select Finished Good</label>
-            <select id="chart-item" onchange="loadChartData()" class="w-full p-2 border rounded-lg text-sm">
-                <option value="">Select item to view chart...</option>
-            </select>
+    <div class="col-span-1 lg:col-span-3 bg-white rounded-xl border border-slate-200 p-6">
+        <div class="flex justify-between items-center mb-4">
+            <h3 class="text-lg font-bold text-slate-700">Monthly Forecasts</h3>
+            <button onclick="loadAllForecasts()" class="px-3 py-1 bg-indigo-600 text-white rounded text-sm hover:bg-indigo-700">
+                <i class="fas fa-refresh mr-1"></i>Refresh
+            </button>
         </div>
         
-        <div id="chart-container" class="h-48 bg-slate-50 rounded-lg flex items-center justify-center">
-            <p class="text-slate-400 text-sm">Select an item to view forecast chart</p>
-        </div>
-        
-        <div id="chart-stats" class="grid grid-cols-3 gap-2 mt-4 text-center text-xs">
-            <div class="bg-slate-50 rounded p-2">
-                <div class="text-slate-500">Total</div>
-                <div id="stat-total" class="font-bold text-lg text-indigo-600">-</div>
-            </div>
-            <div class="bg-slate-50 rounded p-2">
-                <div class="text-slate-500">Avg/Month</div>
-                <div id="stat-avg" class="font-bold text-lg text-emerald-600">-</div>
-            </div>
-            <div class="bg-slate-50 rounded p-2">
-                <div class="text-slate-500">Peak</div>
-                <div id="stat-peak" class="font-bold text-lg text-amber-600">-</div>
-            </div>
+        <div class="overflow-x-auto">
+            <table class="w-full text-xs" id="forecast-table">
+                <thead class="bg-slate-50 sticky top-0">
+                    <tr>
+                        <th class="px-2 py-2 text-left sticky left-0 bg-slate-50">SKU</th>
+                        <th class="px-2 py-2 text-left sticky left-12 bg-slate-50 w-48">Item Name</th>
+                        <th class="px-2 py-2 text-right">May 26</th>
+                        <th class="px-2 py-2 text-right">Jun 26</th>
+                        <th class="px-2 py-2 text-right">Jul 26</th>
+                        <th class="px-2 py-2 text-right">Aug 26</th>
+                        <th class="px-2 py-2 text-right">Sep 26</th>
+                        <th class="px-2 py-2 text-right">Oct 26</th>
+                        <th class="px-2 py-2 text-right">Nov 26</th>
+                        <th class="px-2 py-2 text-right">Dec 26</th>
+                        <th class="px-2 py-2 text-right">Jan 27</th>
+                        <th class="px-2 py-2 text-right">Feb 27</th>
+                        <th class="px-2 py-2 text-right">Mar 27</th>
+                        <th class="px-2 py-2 text-right bg-indigo-100">Total</th>
+                    </tr>
+                </thead>
+                <tbody id="forecast-tbody">
+                    <tr><td colspan="14" class="text-center py-8 text-slate-400">Loading...</td></tr>
+                </tbody>
+            </table>
         </div>
     </div>
-    
+</div>
+
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
     <div class="bg-white rounded-xl border border-slate-200 p-6">
         <h3 class="text-lg font-bold text-slate-700 mb-4">Calculate MRP</h3>
         <p class="text-sm text-slate-500 mb-4">Calculate Material Requirements Planning for all Finished Goods based on 12-month rolling forecasts.</p>
         <button onclick="calculateMRP()" class="w-full px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">
             <i class="fas fa-calculator mr-2"></i>Run MRP Calculation
         </button>
-        
-        <h3 class="text-lg font-bold text-slate-700 mt-6 mb-4">Order Plan</h3>
+    </div>
+    
+    <div class="bg-white rounded-xl border border-slate-200 p-6">
+        <h3 class="text-lg font-bold text-slate-700 mb-4">Order Plan</h3>
         <p class="text-sm text-slate-500 mb-4">View suggested purchase orders for raw materials based on safety stock levels.</p>
         <button onclick="loadOrderPlan()" class="w-full px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700">
             <i class="fas fa-shopping-cart mr-2"></i>Generate Order Plan
@@ -124,6 +132,47 @@ async function loadItemOptions() {
     
     select.innerHTML = options;
     chartSelect.innerHTML = chartOptions;
+}
+
+async function loadAllForecasts() {
+    const tbody = document.getElementById('forecast-tbody');
+    tbody.innerHTML = '<tr><td colspan="14" class="text-center py-8 text-slate-400">Loading...</td></tr>';
+    
+    // Get all FG items with their forecasts
+    const res = await fetch('/api/forecasts/forecasts/');
+    const data = await res.json();
+    
+    if (!data.results || data.results.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="14" class="text-center py-8 text-slate-400">No forecasts yet. Add forecasts using the Forecast Zone.</td></tr>';
+        return;
+    }
+    
+    // Group by item
+    const byItem = {};
+    data.results.forEach(f => {
+        if (!byItem[f.item]) {
+            byItem[f.item] = { sku: f.item_sku, name: f.item_name, months: {} };
+        }
+        byItem[f.item].months[f.month] = f.quantity;
+    });
+    
+    const months = ['2026-05', '2026-06', '2026-07', '2026-08', '2026-09', '2026-10', '2026-11', '2026-12', '2027-01', '2027-02', '2027-03'];
+    
+    tbody.innerHTML = Object.values(byItem).map(item => {
+        let total = 0;
+        const totals = months.map(m => {
+            const qty = item.months[m] || 0;
+            total += qty;
+            return qty;
+        });
+        
+        return `<tr class="hover:bg-blue-50">
+            <td class="px-2 py-2 font-mono font-bold text-indigo-600 sticky left-0 bg-white">${item.sku}</td>
+            <td class="px-2 py-2 sticky left-12 bg-white truncate max-w-xs">${item.name}</td>
+            ${totals.map(q => `<td class="px-2 py-2 text-right font-mono">${q || '-'}</td>`).join('')}
+            <td class="px-2 py-2 text-right font-bold bg-indigo-50">${total}</td>
+        </tr>`;
+    }).join('');
 }
 
 async function loadChartData() {
@@ -353,6 +402,9 @@ async function loadOrderPlan() {
         </table>
     `;
 }
-document.addEventListener('DOMContentLoaded', loadItemOptions);
+document.addEventListener('DOMContentLoaded', function() {
+    loadItemOptions();
+    loadAllForecasts();
+});
 </script>
 {% endblock %}
