@@ -32,15 +32,44 @@
     </div>
     
     <div class="bg-white rounded-xl border border-slate-200 p-6">
+        <h3 class="text-lg font-bold text-slate-700 mb-4">Forecast Chart</h3>
+        <p class="text-sm text-slate-500 mb-4">Monthly forecast overview for all Finished Goods.</p>
+        
+        <div class="mb-4">
+            <label class="block text-xs font-medium text-slate-600 mb-1">Select Finished Good</label>
+            <select id="chart-item" onchange="loadChartData()" class="w-full p-2 border rounded-lg text-sm">
+                <option value="">Select item to view chart...</option>
+            </select>
+        </div>
+        
+        <div id="chart-container" class="h-48 bg-slate-50 rounded-lg flex items-center justify-center">
+            <p class="text-slate-400 text-sm">Select an item to view forecast chart</p>
+        </div>
+        
+        <div id="chart-stats" class="grid grid-cols-3 gap-2 mt-4 text-center text-xs">
+            <div class="bg-slate-50 rounded p-2">
+                <div class="text-slate-500">Total</div>
+                <div id="stat-total" class="font-bold text-lg text-indigo-600">-</div>
+            </div>
+            <div class="bg-slate-50 rounded p-2">
+                <div class="text-slate-500">Avg/Month</div>
+                <div id="stat-avg" class="font-bold text-lg text-emerald-600">-</div>
+            </div>
+            <div class="bg-slate-50 rounded p-2">
+                <div class="text-slate-500">Peak</div>
+                <div id="stat-peak" class="font-bold text-lg text-amber-600">-</div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="bg-white rounded-xl border border-slate-200 p-6">
         <h3 class="text-lg font-bold text-slate-700 mb-4">Calculate MRP</h3>
         <p class="text-sm text-slate-500 mb-4">Calculate Material Requirements Planning for all Finished Goods based on 12-month rolling forecasts.</p>
         <button onclick="calculateMRP()" class="w-full px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">
             <i class="fas fa-calculator mr-2"></i>Run MRP Calculation
         </button>
-    </div>
-    
-    <div class="bg-white rounded-xl border border-slate-200 p-6">
-        <h3 class="text-lg font-bold text-slate-700 mb-4">Order Plan</h3>
+        
+        <h3 class="text-lg font-bold text-slate-700 mt-6 mb-4">Order Plan</h3>
         <p class="text-sm text-slate-500 mb-4">View suggested purchase orders for raw materials based on safety stock levels.</p>
         <button onclick="loadOrderPlan()" class="w-full px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700">
             <i class="fas fa-shopping-cart mr-2"></i>Generate Order Plan
@@ -80,13 +109,74 @@ const csrfToken = getCookie('csrftoken');
 
 async function loadItemOptions() {
     const select = document.getElementById('forecast-item');
+    const chartSelect = document.getElementById('chart-item');
     select.innerHTML = '<option value="">Loading...</option>';
+    chartSelect.innerHTML = '<option value="">Select item to view chart...</option>';
     
     const res = await fetch('/api/inventory/items/?category=FG&page_size=500');
     const data = await res.json();
     
-    select.innerHTML = '<option value="">Select Finished Good...</option>' + 
+    const options = '<option value="">Select Finished Good...</option>' + 
         data.results.map(item => `<option value="${item.id}">${item.sku} - ${item.name}</option>`).join('');
+    
+    const chartOptions = '<option value="">Select item to view chart...</option>' + 
+        data.results.map(item => `<option value="${item.id}">${item.sku} - ${item.name}</option>`).join('');
+    
+    select.innerHTML = options;
+    chartSelect.innerHTML = chartOptions;
+}
+
+async function loadChartData() {
+    const itemId = document.getElementById('chart-item').value;
+    const container = document.getElementById('chart-container');
+    
+    if (!itemId) {
+        container.innerHTML = '<p class="text-slate-400 text-sm">Select an item to view forecast chart</p>';
+        return;
+    }
+    
+    // Get forecasts for this item
+    const res = await fetch(`/api/forecasts/forecasts/?item=${itemId}`);
+    const data = await res.json();
+    
+    if (!data.results || data.results.length === 0) {
+        container.innerHTML = '<p class="text-amber-500 text-sm">No forecasts found. Add forecasts first.</p>';
+        document.getElementById('stat-total').textContent = '-';
+        document.getElementById('stat-avg').textContent = '-';
+        document.getElementById('stat-peak').textContent = '-';
+        return;
+    }
+    
+    // Sort by month and extract data
+    const forecasts = data.results.sort((a, b) => a.month.localeCompare(b.month));
+    const months = forecasts.map(f => {
+        const d = new Date(f.month + '-01');
+        return d.toLocaleDateString('en-US', { month: 'short' });
+    });
+    const values = forecasts.map(f => f.quantity);
+    
+    const total = values.reduce((a, b) => a + b, 0);
+    const avg = total / values.length;
+    const peak = Math.max(...values);
+    
+    document.getElementById('stat-total').textContent = total.toFixed(0);
+    document.getElementById('stat-avg').textContent = avg.toFixed(0);
+    document.getElementById('stat-peak').textContent = peak.toFixed(0);
+    
+    // Simple bar chart using HTML
+    const maxVal = Math.max(...values) || 1;
+    const chartHtml = `
+        <div class="w-full h-full flex items-end justify-around gap-1 px-2 pb-2">
+            ${values.map((v, i) => `
+                <div class="flex flex-col items-center flex-1">
+                    <div class="w-full bg-indigo-500 rounded-t" style="height: ${(v / maxVal) * 100}%; min-height: 2px;"></div>
+                    <div class="text-[8px] text-slate-400 mt-1">${months[i]}</div>
+                    <div class="text-[10px] font-mono">${v}</div>
+                </div>
+            `).join('')}
+        </div>
+    `;
+    container.innerHTML = chartHtml;
 }
 
 async function loadItemForecasts() {
