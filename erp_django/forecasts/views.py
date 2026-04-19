@@ -20,12 +20,17 @@ class ForecastListView(APIView):
         
         queryset = Forecast.objects.all().select_related('item')
         
+        # Filter for Finished Goods only
+        item_category = request.query_params.get('category')
+        if item_category == 'FG':
+            queryset = queryset.filter(item__major_category='FINISHED GOODS')
+        
         if item_id:
             queryset = queryset.filter(item_id=item_id)
         if month:
             queryset = queryset.filter(month=month)
         
-        queryset = queryset.order_by('-month')
+        queryset = queryset.order_by('item__sku', 'month')
         serializer = ForecastSerializer(queryset, many=True)
         return Response(serializer.data)
 

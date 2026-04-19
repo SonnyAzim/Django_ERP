@@ -117,21 +117,23 @@ const csrfToken = getCookie('csrftoken');
 
 async function loadItemOptions() {
     const select = document.getElementById('forecast-item');
-    const chartSelect = document.getElementById('chart-item');
     select.innerHTML = '<option value="">Loading...</option>';
-    chartSelect.innerHTML = '<option value="">Select item to view chart...</option>';
     
-    const res = await fetch('/api/inventory/items/?category=FG&page_size=500');
+    const res = await fetch('/api/inventory/items/?major_category=FINISHED GOODS&page_size=500');
     const data = await res.json();
     
     const options = '<option value="">Select Finished Good...</option>' + 
         data.results.map(item => `<option value="${item.id}">${item.sku} - ${item.name}</option>`).join('');
     
-    const chartOptions = '<option value="">Select item to view chart...</option>' + 
-        data.results.map(item => `<option value="${item.id}">${item.sku} - ${item.name}</option>`).join('');
-    
     select.innerHTML = options;
-    chartSelect.innerHTML = chartOptions;
+    
+    // Also populate chart select
+    const chartSelect = document.getElementById('chart-item');
+    if (chartSelect) {
+        const chartOptions = '<option value="">Select item to view chart...</option>' + 
+            data.results.map(item => `<option value="${item.id}">${item.sku} - ${item.name}</option>`).join('');
+        chartSelect.innerHTML = chartOptions;
+    }
 }
 
 async function loadAllForecasts() {
@@ -139,7 +141,7 @@ async function loadAllForecasts() {
     tbody.innerHTML = '<tr><td colspan="14" class="text-center py-8 text-slate-400">Loading...</td></tr>';
     
     // Get all FG items with their forecasts
-    const res = await fetch('/api/forecasts/forecasts/');
+    const res = await fetch('/api/forecasts/forecasts/?category=FG');
     const data = await res.json();
     
     if (!data.results || data.results.length === 0) {
