@@ -186,41 +186,51 @@ async function loadAllForecasts() {
     const tbody = document.getElementById('forecast-tbody');
     tbody.innerHTML = '<tr><td colspan="14" class="text-center py-8 text-slate-400">Loading...</td></tr>';
     
-    // Get all FG items with their forecasts
-    const res = await fetch('/api/forecasts/forecasts/?category=FG&page_size=5');
-    const data = await res.json();
-    
-    if (!data.results || data.results.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="14" class="text-center py-8 text-slate-400">No forecasts yet. Add forecasts using the Forecast Zone.</td></tr>';
-        return;
-    }
-    
-    // Month format mapping: "May-2026" -> "2026-05"
-    const monthMap = {
-        'May-2026': '2026-05', 'Jun-2026': '2026-06', 'Jul-2026': '2026-07',
-        'Aug-2026': '2026-08', 'Sep-2026': '2026-09', 'Oct-2026': '2026-10',
-        'Nov-2026': '2026-11', 'Dec-2026': '2026-12', 'Jan-2027': '2027-01',
-        'Feb-2027': '2027-02', 'Mar-2027': '2027-03'
-    };
-    const months = ['2026-05', '2026-06', '2026-07', '2026-08', '2026-09', '2026-10', '2026-11', '2026-12', '2027-01', '2027-02', '2027-03'];
-    
-    // Group by item
-    const byItem = {};
-    data.results.forEach(f => {
-        if (!byItem[f.item]) {
-            byItem[f.item] = { sku: f.item_sku, name: f.item_name, months: {} };
-        }
-        const monthKey = monthMap[f.month] || f.month;
-        byItem[f.item].months[monthKey] = f.quantity;
-    });
+    try {
+        const res = await fetch('/api/forecasts/forecasts/?category=FG&page_size=500');
+        if (!res.ok) throw new Error('API error: ' + res.status);
+        const data = await res.json();
         
-        return `<tr class="hover:bg-blue-50">
-            <td class="px-2 py-2 font-mono font-bold text-indigo-600 sticky left-0 bg-white">${item.sku}</td>
-            <td class="px-2 py-2 sticky left-12 bg-white truncate max-w-xs">${item.name}</td>
-            ${totals.map(q => `<td class="px-2 py-2 text-right font-mono">${q || '-'}</td>`).join('')}
-            <td class="px-2 py-2 text-right font-bold bg-indigo-50">${total}</td>
-        </tr>`;
-    }).join('');
+        if (!data.results || data.results.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="14" class="text-center py-8 text-slate-400">No forecasts yet.</td></tr>';
+            return;
+        }
+        
+        const monthMap = {
+            'May-2026': '2026-05', 'Jun-2026': '2026-06', 'Jul-2026': '2026-07',
+            'Aug-2026': '2026-08', 'Sep-2026': '2026-09', 'Oct-2026': '2026-10',
+            'Nov-2026': '2026-11', 'Dec-2026': '2026-12', 'Jan-2027': '2027-01',
+            'Feb-2027': '2027-02', 'Mar-2027': '2027-03'
+        };
+        const months = ['2026-05', '2026-06', '2026-07', '2026-08', '2026-09', '2026-10', '2026-11', '2026-12', '2027-01', '2027-02', '2027-03'];
+        
+        const byItem = {};
+        data.results.forEach(f => {
+            if (!byItem[f.item]) {
+                byItem[f.item] = { sku: f.item_sku, name: f.item_name, months: {} };
+            }
+            const monthKey = monthMap[f.month] || f.month;
+            byItem[f.item].months[monthKey] = f.quantity;
+        });
+        
+        tbody.innerHTML = Object.values(byItem).map(item => {
+            let total = 0;
+            const totals = months.map(m => {
+                const qty = parseFloat(item.months[m]) || 0;
+                total += qty;
+                return qty;
+            });
+            return '<tr class="hover:bg-blue-50">' +
+                '<td class="px-2 py-2 font-mono font-bold text-indigo-600">' + item.sku + '</td>' +
+                '<td class="px-2 py-2 truncate max-w-xs">' + item.name + '</td>' +
+                totals.map(q => '<td class="px-2 py-2 text-right font-mono">' + (q || '-') + '</td>').join('') +
+                '<td class="px-2 py-2 text-right font-bold bg-indigo-50">' + total + '</td>' +
+                '</tr>';
+        }).join('');
+    } catch(err) {
+        console.error(err);
+        tbody.innerHTML = '<tr><td colspan="14" class="text-center py-8 text-red-500">Error: ' + err.message + '</td></tr>';
+    }
 }
 
 async function loadChartData() {
