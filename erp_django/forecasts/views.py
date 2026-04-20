@@ -181,9 +181,32 @@ class MRPCalculateView(APIView):
     def post(self, request):
         today = datetime.now()
         months = []
+        month_labels = []
         for i in range(12):
             month_date = today + relativedelta(months=i)
             months.append(month_date.strftime('%Y-%m'))
+            month_labels.append(month_date.strftime('%b-%Y'))  # e.g., "May-2026"
+        
+        # Get all forecasts for FG items
+        all_forecasts = Forecast.objects.filter(
+            item__major_category='FINISHED GOODS'
+        ).select_related('item')
+        
+        # Month mapping from forecast format to API format
+        month_convert = {
+            'Jan-2026': '2026-01', 'Feb-2026': '2026-02', 'Mar-2026': '2026-03',
+            'Apr-2026': '2026-04', 'May-2026': '2026-05', 'Jun-2026': '2026-06',
+            'Jul-2026': '2026-07', 'Aug-2026': '2026-08', 'Sep-2026': '2026-09',
+            'Oct-2026': '2026-10', 'Nov-2026': '2026-11', 'Dec-2026': '2026-12',
+            'Jan-2027': '2027-01', 'Feb-2027': '2027-02', 'Mar-2027': '2027-03'
+        }
+        
+        # Convert forecasts to dict by item and month
+        forecast_dict = {}
+        for fc in all_forecasts:
+            month_key = month_convert.get(fc.month, fc.month)
+            key = (fc.item_id, month_key)
+            forecast_dict[key] = float(fc.quantity)
         
         results = []
         finished_goods = Item.objects.filter(major_category='FINISHED GOODS')
@@ -198,11 +221,18 @@ class MRPCalculateView(APIView):
                 'months': []
             }
             
-            for month in months:
-                forecast = Forecast.objects.filter(item=fg, month=month).first()
-                demand = float(forecast.quantity) if forecast else 0
+            for i, month in enumerate(months):
+                demand = forecast_dict.get((fg.id, month), 0)
                 
-                safety_stock = calculate_safety_stock(fg, month)
+                # Calculate safety stock from last 2 months demand
+                total_recent = 0
+                for j in range(max(0, i-1), i+1):
+                    total_recent += forecast_dict.get((fg.id, months[j]), 0)
+                avg_monthly = total_recent / 2 if i > 0 else demand
+                if avg_monthly == 0:
+                    avg_monthly = demand
+                
+                safety_stock = max(avg_monthly * 0.5, 10)  # At least 10 units
                 projected = current_stock - demand
                 
                 planned_order = 0
@@ -210,7 +240,7 @@ class MRPCalculateView(APIView):
                     planned_order = safety_stock - projected
                 
                 mrp_entry['months'].append({
-                    'month': month,
+                    'month': month_labels[i],
                     'demand': demand,
                     'projected_stock': round(projected, 2),
                     'safety_stock': round(safety_stock, 2),
