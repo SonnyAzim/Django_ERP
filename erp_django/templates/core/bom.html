@@ -383,7 +383,7 @@ function renderBoM(node, level, isChild) {
     html += '<span style="color:#334155;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:320px;">'+item.name+categoryBadge+'</span>';
     html += '</div>';
     html += '<div style="display:flex;gap:20px;flex-shrink:0;padding-left:12px;font-size:12px;font-family:monospace;">';
-    html += '<div style="width:60px;text-align:right;color:#475569;"><span style="font-weight:600;">'+qty+'</span></div>';
+    html += '<div style="width:60px;text-align:right;color:#475569;"><span style="font-weight:600;">'+Number(qty).toFixed(4)+'</span></div>';
     html += '<div style="width:70px;text-align:right;color:#475569;">৳'+unitPrice.toFixed(2)+'</div>';
     html += '<div style="width:80px;text-align:right;color:#7c3aed;font-weight:600;">৳'+totalValue.toFixed(2)+'</div>';
     if (item.current_stock !== undefined) {
