@@ -187,7 +187,7 @@ async function loadAllForecasts() {
     tbody.innerHTML = '<tr><td colspan="14" class="text-center py-8 text-slate-400">Loading...</td></tr>';
     
     // Get all FG items with their forecasts
-    const res = await fetch('/api/forecasts/forecasts/?category=FG');
+    const res = await fetch('/api/forecasts/forecasts/?category=FG&page_size=1000');
     const data = await res.json();
     
     if (!data.results || data.results.length === 0) {
@@ -195,16 +195,7 @@ async function loadAllForecasts() {
         return;
     }
     
-    // Group by item
-    const byItem = {};
-    data.results.forEach(f => {
-        if (!byItem[f.item]) {
-            byItem[f.item] = { sku: f.item_sku, name: f.item_name, months: {} };
-        }
-        byItem[f.item].months[f.month] = f.quantity;
-    });
-    
-// Month format mapping: "May-2026" -> "2026-05"
+    // Month format mapping: "May-2026" -> "2026-05"
     const monthMap = {
         'May-2026': '2026-05', 'Jun-2026': '2026-06', 'Jul-2026': '2026-07',
         'Aug-2026': '2026-08', 'Sep-2026': '2026-09', 'Oct-2026': '2026-10',
