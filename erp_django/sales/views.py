@@ -46,10 +46,12 @@ class SalesOrderViewSet(viewsets.ModelViewSet):
             item = Item.objects.get(id=item_data['item_id'])
             
             if item.major_category != 'FINISHED GOODS':
-                raise ValueError(f"Only finished goods can be sold. {item.sku} is not a finished good.")
+                raise ValueError(f"Sorry, only Finished Goods can be sold. {item.sku} is a {item.major_category}.")
             
-            if item.current_stock < item_data['quantity']:
-                raise ValueError(f"Insufficient stock for {item.sku}")
+            available = float(item.current_stock or 0)
+            requested = item_data['quantity']
+            if available < requested:
+                raise ValueError(f"Insufficient stock for {item.sku}. Available: {available}, Requested: {requested}")
             
             unit_price = item_data.get('unit_price', item.price)
             qty = item_data['quantity']
