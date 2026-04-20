@@ -187,7 +187,7 @@ async function loadAllForecasts() {
     tbody.innerHTML = '<tr><td colspan="14" class="text-center py-8 text-slate-400">Loading...</td></tr>';
     
     // Get all FG items with their forecasts
-    const res = await fetch('/api/forecasts/forecasts/?category=FG&page_size=1000');
+    const res = await fetch('/api/forecasts/forecasts/?category=FG&page_size=5');
     const data = await res.json();
     
     if (!data.results || data.results.length === 0) {
