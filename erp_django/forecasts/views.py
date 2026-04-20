@@ -4,6 +4,7 @@ Forecast API Views with MRP Engine
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
+from rest_framework.pagination import PageNumberPagination
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
 
@@ -11,6 +12,12 @@ from .models import Forecast, MRPResult
 from .serializers import ForecastSerializer
 from inventory.models import Item
 from bom.models import BoM
+
+
+class ForecastPagination(PageNumberPagination):
+    page_size = 1000
+    page_size_query_param = 'page_size'
+    max_page_size = 5000
 
 
 class ForecastListView(APIView):
@@ -31,6 +38,14 @@ class ForecastListView(APIView):
             queryset = queryset.filter(month=month)
         
         queryset = queryset.order_by('item__sku', 'month')
+        
+        # Add pagination for large datasets
+        paginator = ForecastPagination()
+        page = paginator.paginate_queryset(queryset, request)
+        if page is not None:
+            serializer = ForecastSerializer(page, many=True)
+            return paginator.get_paginated_response(serializer.data)
+        
         serializer = ForecastSerializer(queryset, many=True)
         return Response(serializer.data)
     
