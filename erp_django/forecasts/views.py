@@ -257,30 +257,55 @@ class OrderPlanView(APIView):
         
         order_plan = []
         
+        # Get all Raw Materials and Packaging Materials
         raw_materials = Item.objects.filter(
             major_category__in=['RAW MATERIAL', 'PACKAGING MATERIAL']
         )
         
+        # Get all Finished Goods forecasts
+        fg_forecasts = Forecast.objects.filter(
+            item__major_category='FINISHED GOODS'
+        ).select_related('item')
+        
+        # Aggregate FG demand by month
+        fg_demand = {}
+        for fc in fg_forecasts:
+            if fc.month not in fg_demand:
+                fg_demand[fc.month] = 0
+            fg_demand[fc.month] += float(fc.quantity)
+        
+        total_fg_demand = sum(fg_demand.values())
+        avg_fg_monthly = total_fg_demand / len(months) if months else 0
+        
         for rm in raw_materials:
-            total_requirement = 0
-            preferred_link = rm.item_suppliers.filter(is_preferred=True).first()
-            lead_time = preferred_link.lead_time_days if preferred_link else 30
+            # Check if this RM is used in any FG BoM
+            bom_entries = BoM.objects.filter(child=rm).select_related('parent')
             
-            for month in months:
-                forecast = Forecast.objects.filter(item=rm, month=month).first()
-                if forecast:
-                    total_requirement += float(forecast.quantity)
-            
-            avg_monthly = total_requirement / 12 if total_requirement > 0 else 0
-            safety_stock = avg_monthly * 2
-            
-            current_stock = float(rm.current_stock or 0)
-            
-            if current_stock < safety_stock:
-                order_qty = safety_stock - current_stock + (avg_monthly * 0.5)
+            if not bom_entries.exists():
+                # Not used in BoM - skip or use direct forecast
+                current_stock = float(rm.current_stock or 0)
+                safety_stock = max(50, avg_fg_monthly * 0.5)
+            else:
+                # Calculate RM requirement from FG BoM
+                rm_multiplier = 0
+                for bom in bom_entries:
+                    # Get monthly demand for this FG
+                    for month in months:
+                        month_demand = fg_demand.get(month, 0)
+                        rm_multiplier += float(bom.quantity) * month_demand
                 
-                order_month_idx = 12 - lead_time // 30
-                order_month = months[min(order_month_idx, 11)] if months else months[0]
+                avg_monthly = rm_multiplier / len(months) if months else 0
+                safety_stock = max(avg_monthly * 2, 50)
+                current_stock = float(rm.current_stock or 0)
+            
+            # Calculate order if below safety stock
+            if current_stock < safety_stock:
+                preferred_link = rm.item_suppliers.filter(is_preferred=True).first()
+                lead_time = preferred_link.lead_time_days if preferred_link else 30
+                order_qty = (safety_stock - current_stock) * 1.2
+                
+                order_month_idx = min(12 - (lead_time // 30), 11) if lead_time else 0
+                order_month = months[order_month_idx] if months else '2026-05'
                 
                 order_plan.append({
                     'sku': rm.sku,
@@ -290,7 +315,7 @@ class OrderPlanView(APIView):
                     'suggested_order': round(order_qty, 2),
                     'order_month': order_month,
                     'lead_time_days': lead_time,
-                    'unit_price': float(preferred_link.unit_price or rm.price) if preferred_link else float(rm.price)
+                    'unit_price': float(preferred_link.unit_price or rm.price) if preferred_link else float(rm.price or 0)
                 })
         
         return Response(order_plan)
