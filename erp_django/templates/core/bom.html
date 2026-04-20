@@ -10,9 +10,9 @@
             <button onclick="switchTab('sfg')" id="tab-sfg" class="flex-1 py-2 border-b-2 border-transparent">Semi</button>
             <button onclick="switchTab('rm')" id="tab-rm" class="flex-1 py-2 border-b-2 border-transparent">Raw</button>
         </div>
-        <div id="items-fg" class="flex-1 overflow-auto text-xs"><table class="w-full"><thead class="bg-slate-50 sticky top-0"><tr><th class="p-2 text-left">SKU</th><th class="p-2 text-left">Name</th><th class="p-2 text-left">Category</th></tr></thead><tbody id="table-fg"></tbody></table></div>
-        <div id="items-sfg" class="flex-1 overflow-auto text-xs hidden"><table class="w-full"><thead class="bg-slate-50 sticky top-0"><tr><th class="p-2 text-left">SKU</th><th class="p-2 text-left">Name</th><th class="p-2 text-left">Category</th></tr></thead><tbody id="table-sfg"></tbody></table></div>
-        <div id="items-rm" class="flex-1 overflow-auto text-xs hidden"><table class="w-full"><thead class="bg-slate-50 sticky top-0"><tr><th class="p-2 text-left">SKU</th><th class="p-2 text-left">Name</th><th class="p-2 text-left">Category</th></tr></thead><tbody id="table-rm"></tbody></table></div>
+        <div id="items-fg" class="flex-1 overflow-auto text-xs"><table class="w-full"><thead class="bg-slate-50 sticky top-0"><tr><th class="p-2 text-left">Item</th></tr></thead><tbody id="table-fg"></tbody></table></div>
+        <div id="items-sfg" class="flex-1 overflow-auto text-xs hidden"><table class="w-full"><thead class="bg-slate-50 sticky top-0"><tr><th class="p-2 text-left">Item</th></tr></thead><tbody id="table-sfg"></tbody></table></div>
+        <div id="items-rm" class="flex-1 overflow-auto text-xs hidden"><table class="w-full"><thead class="bg-slate-50 sticky top-0"><tr><th class="p-2 text-left">Item</th></tr></thead><tbody id="table-rm"></tbody></table></div>
         <div class="p-2 border-t flex gap-1 text-xs">
             <button onclick="openAddBomModal()" class="flex-1 py-1.5 bg-emerald-600 text-white rounded">Add</button>
             <button onclick="openBulkUploadModal()" class="flex-1 py-1.5 bg-blue-600 text-white rounded">Bulk</button>
@@ -124,7 +124,7 @@ async function loadItems() {
 function renderTable(section, items) {
     var tbody = document.getElementById('table-'+section);
     if (!items.length) { tbody.innerHTML = '<tr><td colspan="2" class="p-4 text-center">No items</td></tr>'; return; }
-    tbody.innerHTML = items.map(function(item){var cat = item.major_category || 'RAW MATERIAL';return '<tr class="hover:bg-blue-50 cursor-pointer border-b border-slate-100" onclick="selectItem('+item.id+',\''+item.sku+'\',\''+item.name.replace(/'/g,"\\'")+'\',\''+cat+'\')"><td class="p-2 font-mono font-bold text-indigo-600">'+item.sku+'</td><td class="p-2">'+item.name+'</td><td class="p-2 text-xs text-slate-400">'+cat+'</td></tr>'}).join('');
+    tbody.innerHTML = items.map(function(item){return '<tr class="hover:bg-blue-50 cursor-pointer border-b border-slate-100" onclick="selectItem('+item.id+',\''+item.sku+'\',\''+item.name.replace(/'/g,"\\'")+'\',\''+item.major_category+'\')"><td class="p-2"><div class="text-slate-500 text-[10px] font-mono">'+item.sku+'</div><div class="text-slate-700">'+item.name+'</div></td></tr>'}).join('');
 }
 
 function switchTab(tab) {
