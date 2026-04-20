@@ -224,7 +224,7 @@ class MRPCalculateView(APIView):
             for i, month in enumerate(months):
                 demand = forecast_dict.get((fg.id, month), 0)
                 
-                # Calculate safety stock from last 2 months demand
+                # Calculate average demand from last 2 months
                 total_recent = 0
                 for j in range(max(0, i-1), i+1):
                     total_recent += forecast_dict.get((fg.id, months[j]), 0)
@@ -232,7 +232,13 @@ class MRPCalculateView(APIView):
                 if avg_monthly == 0:
                     avg_monthly = demand
                 
-                safety_stock = max(avg_monthly * 0.5, 10)  # At least 10 units
+                # Get lead time for this item (in days, convert to months)
+                lead_time = getattr(fg, 'lead_time_days', None) or 0
+                lead_time_months = max(1, int(lead_time / 30) + 1) if lead_time else 1
+                
+                # Safety stock = avg demand × (lead_time_months + buffer)
+                safety_stock = max(avg_monthly * lead_time_months, 10)
+                
                 projected = current_stock - demand
                 
                 planned_order = 0
