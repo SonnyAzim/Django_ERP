@@ -396,7 +396,7 @@ async function calculateMRP() {
                         <th class="px-2 py-2 text-left">SKU</th>
                         <th class="px-2 py-2 text-left">Name</th>
                         <th class="px-2 py-2 text-right">Stock</th>
-                        ${data.results[0].months.map(m => `<th class="px-2 py-2 text-right">${m.month.slice(5)}</th>`).join('')}
+                        ${data.results[0].months.map(m => `<th class="px-2 py-2 text-right">${m.month.split('-')[0]}</th>`).join('')}
                     </tr>
                 </thead>
                 <tbody>
