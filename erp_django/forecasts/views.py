@@ -286,8 +286,19 @@ class MaterialRequirementsView(APIView):
 class OrderPlanView(APIView):
     def get(self, request):
         today = datetime.now()
+        
+        # Get options from query params
+        try:
+            months_to_use = int(request.query_params.get('months', 12))
+        except:
+            months_to_use = 12
+        
+        consider_fg_stock = request.query_params.get('fg_stock', 'true').lower() == 'true'
+        consider_sfg_stock = request.query_params.get('sfg_stock', 'true').lower() == 'true'
+        consider_rm_stock = request.query_params.get('rm_stock', 'true').lower() == 'true'
+        
         months = []
-        for i in range(12):
+        for i in range(months_to_use):
             month_date = today + relativedelta(months=i)
             months.append(month_date.strftime('%Y-%m'))
         
@@ -317,22 +328,53 @@ class OrderPlanView(APIView):
             # Check if this RM is used in any FG BoM
             bom_entries = BoM.objects.filter(child=rm).select_related('parent')
             
+            # Get effective stock based on options
+            effective_stock = float(rm.current_stock or 0) if consider_rm_stock else 0
+            
             if not bom_entries.exists():
-                # Not used in BoM - skip or use direct forecast
-                current_stock = float(rm.current_stock or 0)
-                safety_stock = max(50, avg_fg_monthly * 0.5)
-            else:
-                # Calculate RM requirement from FG BoM
-                rm_multiplier = 0
-                for bom in bom_entries:
-                    # Get monthly demand for this FG
+                # Not used in BoM - skip
+                continue
+            
+            # Calculate RM requirement from FG BoM (considering SFG chain)
+            rm_demand_total = 0
+            for bom in bom_entries:
+                parent = bom.parent
+                
+                # Check if parent is SFG
+                if parent.major_category and 'SEMI' in parent.major_category.upper():
+                    # SFG level - check if this SFG is used in any FG BoM
+                    sfg_bom_entries = BoM.objects.filter(child=parent).select_related('parent')
+                    
+                    sfg_stock = float(parent.current_stock or 0) if consider_sfg_stock else 0
+                    
+                    for sfg_bom in sfg_bom_entries:
+                        fg = sfg_bom.parent
+                        fg_stock = float(fg.current_stock or 0) if consider_fg_stock else 0
+                        
+                        for month in months:
+                            month_demand = fg_demand.get(month, 0)
+                            if consider_fg_stock and fg_stock > 0:
+                                month_demand = max(0, month_demand - fg_stock)
+                            if consider_sfg_stock and sfg_stock > 0:
+                                month_demand = max(0, month_demand - sfg_stock)
+                            
+                            rm_demand_total += float(bom.quantity) * float(sfg_bom.quantity) * month_demand
+                
+                else:
+                    # Direct FG parent
+                    fg = parent
+                    fg_stock = float(fg.current_stock or 0) if consider_fg_stock else 0
+                    
                     for month in months:
                         month_demand = fg_demand.get(month, 0)
-                        rm_multiplier += float(bom.quantity) * month_demand
-                
-                avg_monthly = rm_multiplier / len(months) if months else 0
-                safety_stock = max(avg_monthly * 2, 50)
-                current_stock = float(rm.current_stock or 0)
+                        if consider_fg_stock and fg_stock > 0:
+                            month_demand = max(0, month_demand - fg_stock)
+                        
+                        rm_demand_total += float(bom.quantity) * month_demand
+            
+            avg_monthly = rm_demand_total / len(months) if months else 0
+            safety_stock = max(avg_monthly * 2, 50)
+            current_stock = effective_stock
             
             # Calculate order if below safety stock
             if current_stock < safety_stock:
