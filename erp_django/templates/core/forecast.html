@@ -119,12 +119,21 @@
             
             <div class="space-y-3">
                 <div>
-                    <label class="block text-xs text-slate-600 mb-1">Months to Consider</label>
-                    <select id="op-months" class="w-full p-2 border rounded text-sm">
-                        <option value="3">Next 3 months</option>
-                        <option value="6">Next 6 months</option>
-                        <option value="12" selected>Next 12 months</option>
-                    </select>
+                    <label class="block text-xs text-slate-600 mb-1">Select Months</label>
+                    <div class="grid grid-cols-3 gap-1">
+                        <label class="flex items-center gap-1 text-xs"><input type="checkbox" value="1" checked class="rounded"> Jan</label>
+                        <label class="flex items-center gap-1 text-xs"><input type="checkbox" value="2" checked class="rounded"> Feb</label>
+                        <label class="flex items-center gap-1 text-xs"><input type="checkbox" value="3" checked class="rounded"> Mar</label>
+                        <label class="flex items-center gap-1 text-xs"><input type="checkbox" value="4" checked class="rounded"> Apr</label>
+                        <label class="flex items-center gap-1 text-xs"><input type="checkbox" value="5" checked class="rounded"> May</label>
+                        <label class="flex items-center gap-1 text-xs"><input type="checkbox" value="6" checked class="rounded"> Jun</label>
+                        <label class="flex items-center gap-1 text-xs"><input type="checkbox" value="7" checked class="rounded"> Jul</label>
+                        <label class="flex items-center gap-1 text-xs"><input type="checkbox" value="8" checked class="rounded"> Aug</label>
+                        <label class="flex items-center gap-1 text-xs"><input type="checkbox" value="9" checked class="rounded"> Sep</label>
+                        <label class="flex items-center gap-1 text-xs"><input type="checkbox" value="10" checked class="rounded"> Oct</label>
+                        <label class="flex items-center gap-1 text-xs"><input type="checkbox" value="11" checked class="rounded"> Nov</label>
+                        <label class="flex items-center gap-1 text-xs"><input type="checkbox" value="12" checked class="rounded"> Dec</label>
+                    </div>
                 </div>
                 
                 <div class="flex items-center gap-2">
@@ -140,6 +149,11 @@
                 <div class="flex items-center gap-2">
                     <input type="checkbox" id="op-rm-stock" checked class="rounded">
                     <label for="op-rm-stock" class="text-xs text-slate-600">Consider RM Stock</label>
+                </div>
+                
+                <div>
+                    <label class="block text-xs text-slate-600 mb-1">Pipe Line Material (SKU)</label>
+                    <input type="text" id="op-pipe-material" placeholder="e.g., 123456" class="w-full p-2 border rounded text-sm font-mono">
                 </div>
             </div>
         </div>
@@ -498,17 +512,24 @@ async function calculateMRP() {
 async function loadOrderPlan() {
     document.getElementById('results').innerHTML = '<p class="text-center text-slate-400">Loading...</p>';
     
-    // Get options
-    const months = document.getElementById('op-months').value;
-    const considerFgStock = document.getElementById('op-fg-stock').checked;
-    const considerSfgStock = document.getElementById('op-sfg-stock').checked;
-    const considerRmStock = document.getElementById('op-rm-stock').checked;
+    // Get selected months
+    const monthCheckboxes = document.querySelectorAll('input[type="checkbox"][value]');
+    const selectedMonths = [];
+    monthCheckboxes.forEach(cb => {
+        if (cb.checked) selectedMonths.push(parseInt(cb.value));
+    });
+    
+    const considerFgStock = document.getElementById('op-fg-stock')?.checked || false;
+    const considerSfgStock = document.getElementById('op-sfg-stock')?.checked || false;
+    const considerRmStock = document.getElementById('op-rm-stock')?.checked || false;
+    const pipeMaterial = document.getElementById('op-pipe-material')?.value || '';
     
     const params = new URLSearchParams({
-        months: months,
+        months: selectedMonths.join(','),
         fg_stock: considerFgStock,
         sfg_stock: considerSfgStock,
-        rm_stock: considerRmStock
+        rm_stock: considerRmStock,
+        pipe_material: pipeMaterial
     });
     
     const res = await fetch('/api/forecasts/mrp/order-plan/?' + params.toString());

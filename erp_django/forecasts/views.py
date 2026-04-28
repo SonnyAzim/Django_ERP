@@ -288,19 +288,30 @@ class OrderPlanView(APIView):
         today = datetime.now()
         
         # Get options from query params
+        months_param = request.query_params.get('months', '1,2,3,4,5,6,7,8,9,10,11,12')
         try:
-            months_to_use = int(request.query_params.get('months', 12))
+            months_to_use = [int(m) for m in months_param.split(',') if m.strip()]
         except:
-            months_to_use = 12
+            months_to_use = list(range(1, 13))
         
         consider_fg_stock = request.query_params.get('fg_stock', 'true').lower() == 'true'
         consider_sfg_stock = request.query_params.get('sfg_stock', 'true').lower() == 'true'
         consider_rm_stock = request.query_params.get('rm_stock', 'true').lower() == 'true'
+        pipe_material_sku = request.query_params.get('pipe_material', '')
         
         months = []
-        for i in range(months_to_use):
-            month_date = today + relativedelta(months=i)
-            months.append(month_date.strftime('%Y-%m'))
+        for i in months_to_use:
+            if 1 <= i <= 12:
+                month_date = today + relativedelta(months=i-1)  # i=1 is current month
+                months.append(month_date.strftime('%Y-%m'))
+        
+        # Get Raw Materials or filter by pipe line material
+        if pipe_material_sku:
+            raw_materials = Item.objects.filter(sku=pipe_material_sku)
+        else:
+            raw_materials = Item.objects.filter(
+                major_category__in=['RAW MATERIAL', 'PACKAGING MATERIAL']
+            )
         
         order_plan = []
         
