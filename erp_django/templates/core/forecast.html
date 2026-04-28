@@ -220,6 +220,42 @@
     </div>
 </div>
 
+<!-- Pipeline Section -->
+<div class="bg-white rounded-xl border border-slate-200 p-6 mt-6">
+    <h3 class="text-lg font-bold text-slate-700 mb-4">Pipeline Tracking</h3>
+    <p class="text-sm text-slate-500 mb-4">Track ordered items until they arrive and are added to stock.</p>
+    
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+        <div>
+            <label class="block text-xs text-slate-600 mb-1">SKU</label>
+            <input type="text" id="pipe-sku" placeholder="Item SKU" class="w-full p-2 border rounded text-sm font-mono">
+        </div>
+        <div>
+            <label class="block text-xs text-slate-600 mb-1">Quantity</label>
+            <input type="number" id="pipe-qty" placeholder="0" class="w-full p-2 border rounded text-sm">
+        </div>
+        <div>
+            <label class="block text-xs text-slate-600 mb-1">Unit Price</label>
+            <input type="number" id="pipe-price" placeholder="0.00" step="0.01" class="w-full p-2 border rounded text-sm">
+        </div>
+        <div class="flex items-end">
+            <button onclick="addPipelineItem()" class="w-full px-3 py-2 bg-indigo-600 text-white rounded-lg text-sm hover:bg-indigo-700">
+                <i class="fas fa-plus mr-1"></i>Add
+            </button>
+        </div>
+    </div>
+    
+    <div class="mb-4">
+        <p class="text-xs text-slate-600 mb-1">Bulk Add (format: SKU,Qty,Price per line)</p>
+        <textarea id="pipe-bulk" rows="3" placeholder="123456,100,2.50&#10;789012,200,1.75" class="w-full p-2 border rounded text-sm font-mono text-xs"></textarea>
+        <button onclick="bulkAddPipeline()" class="mt-2 px-3 py-1 bg-slate-100 text-slate-700 rounded text-xs hover:bg-slate-200">
+            <i class="fas fa-upload mr-1"></i>Bulk Add
+        </button>
+    </div>
+    
+    <div id="pipeline-list" class="space-y-2 max-h-60 overflow-y-auto"></div>
+</div>
+
 <div class="bg-white rounded-xl border border-slate-200 p-6">
     <h3 class="text-lg font-bold text-slate-700 mb-4">Results</h3>
     <div id="results">
@@ -678,6 +714,133 @@ async function uploadBulk() {
 document.addEventListener('DOMContentLoaded', function() {
     loadItemOptions();
     loadAllForecasts();
+    loadPipeline();
 });
+
+async function loadPipeline() {
+    const res = await fetch('/api/forecasts/pipeline/');
+    const data = await res.json();
+    const container = document.getElementById('pipeline-list');
+    if (!data.length) {
+        container.innerHTML = '<p class="text-slate-400 text-sm py-4 text-center">No pipeline items yet.</p>';
+        return;
+    }
+    container.innerHTML = data.map(p => `
+        <div class="border rounded p-3 mb-2 flex justify-between items-center text-sm ${p.status === 'received' ? 'opacity-50' : ''}">
+            <div>
+                <span class="font-mono font-bold">${p.sku}</span>
+                <span class="ml-2">${p.name}</span>
+                <span class="ml-2 text-slate-500">${p.quantity} units</span>
+            </div>
+            <div class="flex items-center gap-2">
+                <span class="px-2 py-1 rounded text-xs ${getStatusColor(p.status)}">${p.status}</span>
+                ${p.status !== 'received' ? `<button onclick="updatePipelineStatus(${p.id}, '${getNextStatus(p.status)}')" class="px-2 py-1 bg-indigo-600 text-white rounded text-xs">Mark ${getNextStatus(p.status)}</button>` : ''}
+            </div>
+        </div>
+    `).join('');
+}
+
+function getStatusColor(status) {
+    const colors = {
+        'ordered': 'bg-blue-100 text-blue-700',
+        'shipped': 'bg-purple-100 text-purple-700',
+        'in_transit': 'bg-amber-100 text-amber-700',
+        'received': 'bg-green-100 text-green-700'
+    };
+    return colors[status] || 'bg-slate-100';
+}
+
+function getNextStatus(status) {
+    const flow = {'ordered': 'shipped', 'shipped': 'in_transit', 'in_transit': 'received'};
+    return flow[status] || 'received';
+}
+
+async function updatePipelineStatus(id, newStatus) {
+    const res = await fetch(`/api/forecasts/pipeline/${id}/`, {
+        method: 'PATCH',
+        headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrfToken},
+        body: JSON.stringify({status: newStatus})
+    });
+    if (res.ok) {
+        loadPipeline();
+    }
+}
+
+async function addPipelineItem() {
+    const sku = document.getElementById('pipe-sku').value;
+    if (!sku) return alert('Enter SKU');
+    const res = await fetch('/api/inventory/items/', {query: `sku=${sku}`});
+    const data = await res.json();
+    if (!data.results || !data.results.length) return alert('Item not found');
+    
+    const item = data.results[0];
+    const qty = parseFloat(document.getElementById('pipe-qty').value) || 1;
+    const price = parseFloat(document.getElementById('pipe-price').value) || 0;
+    
+    const createRes = await fetch('/api/forecasts/pipeline/', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrfToken},
+        body: JSON.stringify({
+            item: item.id,
+            sku: item.sku,
+            name: item.name,
+            quantity: qty,
+            unit_price: price,
+            status: 'ordered'
+        })
+    });
+    
+    if (createRes.ok) {
+        document.getElementById('pipe-sku').value = '';
+        document.getElementById('pipe-qty').value = '';
+        document.getElementById('pipe-price').value = '';
+        loadPipeline();
+    }
+}
+
+async function bulkAddPipeline() {
+    const text = document.getElementById('pipe-bulk').value;
+    if (!text.trim()) return alert('Enter data');
+    
+    const lines = text.trim().split('\n');
+    const items = [];
+    
+    for (let line of lines) {
+        const parts = line.split(',').map(p => p.trim());
+        if (parts.length < 2) continue;
+        items.push({
+            sku: parts[0],
+            quantity: parseFloat(parts[1]) || 1,
+            unit_price: parseFloat(parts[2]) || 0
+        });
+    }
+    
+    // Lookup item IDs
+    const res = await fetch('/api/inventory/items/?page_size=1000');
+    const data = await res.json();
+    const skuMap = {};
+    data.results.forEach(item => { skuMap[item.sku] = item.id; });
+    
+    const pipelineItems = items.map(i => ({
+        item: skuMap[i.sku],
+        sku: i.sku,
+        name: '',
+        quantity: i.quantity,
+        unit_price: i.unit_price,
+        status: 'ordered'
+    })).filter(i => i.item);
+    
+    const createRes = await fetch('/api/forecasts/pipeline/', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrfToken},
+        body: JSON.stringify(pipelineItems)
+    });
+    
+    if (createRes.ok) {
+        document.getElementById('pipe-bulk').value = '';
+        loadPipeline();
+        alert('Added ' + pipelineItems.length + ' items');
+    }
+}
 </script>
 {% endblock %}

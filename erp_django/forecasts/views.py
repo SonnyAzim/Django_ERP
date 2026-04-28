@@ -8,8 +8,8 @@ from rest_framework.pagination import PageNumberPagination
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
 
-from .models import Forecast, MRPResult
-from .serializers import ForecastSerializer
+from .models import Forecast, MRPResult, Pipeline
+from .serializers import ForecastSerializer, PipelineSerializer
 from inventory.models import Item
 from bom.models import BoM
 
@@ -408,3 +408,50 @@ class OrderPlanView(APIView):
                 })
         
         return Response(order_plan)
+
+
+class PipelineView(APIView):
+    def get(self, request):
+        """List pipeline items, optionally filtered by status"""
+        status_filter = request.query_params.get('status', None)
+        queryset = Pipeline.objects.all().select_related('item', 'supplier')
+        
+        if status_filter:
+            queryset = queryset.filter(status=status_filter)
+        
+        serializer = PipelineSerializer(queryset, many=True)
+        return Response(serializer.data)
+    
+    def post(self, request):
+        """Create pipeline item(s) - single or bulk"""
+        data = request.data
+        
+        if isinstance(data, list):
+            # Bulk create
+            created = []
+            for item_data in data:
+                serializer = PipelineSerializer(data=item_data)
+                if serializer.is_valid():
+                    serializer.save()
+                    created.append(serializer.data)
+            return Response({'success': True, 'created': len(created)})
+        else:
+            # Single create
+            serializer = PipelineSerializer(data=data)
+            if serializer.is_valid():
+                serializer.save()
+                return Response(serializer.data, status=status.HTTP_201_CREATED)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+    def patch(self, request, pk=None):
+        """Update pipeline status (e.g., ordered -> shipped -> received)"""
+        try:
+            pipeline = Pipeline.objects.get(id=pk)
+        except Pipeline.DoesNotExist:
+            return Response({'error': 'Not found'}, status=status.HTTP_404_NOT_FOUND)
+        
+        new_status = request.data.get('status')
+        if new_status:
+            pipeline.status = new_status
+            pipeline.save()
+        return Response(PipelineSerializer(pipeline).data)
